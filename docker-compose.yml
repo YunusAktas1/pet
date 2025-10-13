@@ -1,0 +1,40 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: petmatch
+      POSTGRES_USER: petuser
+      POSTGRES_PASSWORD: petpass
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U petuser -d petmatch"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      - ENV_FILE=backend/.env.docker
+    env_file:
+      - backend/.env.docker
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app/backend
+      - ./alembic:/app/alembic
+      - ./scripts:/app/scripts
+    depends_on:
+      db:
+        condition: service_healthy
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir backend"
+
+volumes:
+  pgdata:

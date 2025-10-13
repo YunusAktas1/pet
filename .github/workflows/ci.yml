@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: petmatch
+          POSTGRES_USER: petuser
+          POSTGRES_PASSWORD: petpass
+        options: >-
+          --health-cmd="pg_isready -U petuser -d petmatch"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+        ports:
+          - 5432:5432
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+          pip install pytest coverage
+
+      - name: Env for CI
+        run: |
+          echo "ENV_FILE=backend/.env.ci" >> $GITHUB_ENV
+          cat > backend/.env.ci <<'EOF'
+          environment=ci
+          api_v1_str=/api/v1
+          secret_key=ci-secret
+          access_token_expire_minutes=60
+          algorithm=HS256
+          database_url=postgresql+psycopg2://petuser:petpass@localhost:5432/petmatch
+          cors_allow_origins=["*"]
+          EOF
+
+      - name: Wait for Postgres
+        run: |
+          for i in {1..30}; do
+            (echo > /dev/tcp/127.0.0.1/5432) >/dev/null 2>&1 && echo "db up" && break
+            sleep 1
+          done
+
+      - name: Migrate
+        run: |
+          python -m alembic upgrade head
+
+      - name: Lint & Typecheck
+        run: |
+          python -m ruff check backend
+          python -m black --check backend
+          python -m mypy backend
+
+      - name: Tests
+        run: |
+          coverage run -m pytest -q
+          coverage report -m

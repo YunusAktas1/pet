@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+sqlmodel
+alembic
+psycopg2-binary
+httpx
+pydantic-settings
+passlib[argon2]
+PyJWT
+structlog
+email-validator

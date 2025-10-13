@@ -1,0 +1,57 @@
+﻿# Python
+__pycache__/
+*.py[cod]
+*.pyc
+venv/
+.venv/
+env/
+ENV/
+*.egg-info/
+.Python
+
+# Cache
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+3.11/
+3.12/
+
+# Environment
+.env
+.env.local
+.env.docker
+*.env
+!.env.example
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+dev.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build
+dist/
+build/
+
+# Logs
+*.log
+logs/
+
+# Large files
+*.zip
+*.exe
+*.msi
+*.dmg
+*.iso
+
+# Node
+node_modules/

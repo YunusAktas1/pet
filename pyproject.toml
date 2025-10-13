@@ -1,0 +1,29 @@
+[tool.black]
+line-length = 88
+target-version = ["py311"]
+
+[tool.isort]
+profile = "black"
+line_length = 88
+py_version = 311
+
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "B", "I", "UP", "SIM"]
+ignore = []
+
+[tool.ruff.lint.per-file-ignores]
+"backend/routers/*.py" = ["B008", "E501"]
+"alembic/env.py" = ["E402"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unused_ignores = true
+pretty = true
+
+[[tool.mypy.overrides]]
+module = ["passlib.*", "sqlalchemy.*", "sqlmodel.*", "pydantic.*"]
+ignore_missing_imports = true
