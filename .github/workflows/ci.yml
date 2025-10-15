@@ -1,74 +1,170 @@
-name: CI
+name: Backend CI
 
 on:
   push:
-    branches: ["**"]
+    branches:
+      - main
+      - develop
   pull_request:
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
-  test:
+  lint-format:
+    name: Lint & Type Check (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
-
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_DB: petmatch
-          POSTGRES_USER: petuser
-          POSTGRES_PASSWORD: petpass
-        options: >-
-          --health-cmd="pg_isready -U petuser -d petmatch"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
-        ports:
-          - 5432:5432
-
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: ${{ matrix.python-version }}
 
-      - name: Install deps
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('backend/requirements.txt', 'pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-${{ matrix.python-version }}-
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r backend/requirements.txt
-          pip install pytest coverage
+          pip install ruff black mypy
 
-      - name: Env for CI
+      - name: Ruff
+        run: ruff check backend
+
+      - name: Black
+        run: black --check backend
+
+      - name: Mypy
+        run: mypy backend
+
+  tests:
+    name: Test Suite (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    needs: lint-format
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    services:
+      postgres:
+        image: postgres:16
+        ports:
+          - 5432:5432
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: petmatch
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      DATABASE_URL: postgresql+psycopg2://postgres:postgres@localhost:5432/petmatch
+      PYTHONPATH: ${{ github.workspace }}
+      ENV_FILE: backend/.env
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('backend/requirements.txt', 'pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-${{ matrix.python-version }}-
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
         run: |
-          echo "ENV_FILE=backend/.env.ci" >> $GITHUB_ENV
-          cat > backend/.env.ci <<'EOF'
-          environment=ci
-          api_v1_str=/api/v1
-          secret_key=ci-secret
-          access_token_expire_minutes=60
-          algorithm=HS256
-          database_url=postgresql+psycopg2://petuser:petpass@localhost:5432/petmatch
-          cors_allow_origins=["*"]
-          EOF
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+          pip install pytest pytest-cov coverage ruff black mypy
 
-      - name: Wait for Postgres
+      - name: Wait for database
+        run: |
+          python - <<'PY'
+          import os, time
+          import psycopg2
+
+          url = os.environ["DATABASE_URL"]
+          for _ in range(30):
+              try:
+                  conn = psycopg2.connect(url)
+              except Exception:
+                  time.sleep(2)
+              else:
+                  conn.close()
+                  break
+          else:
+              raise SystemExit("Database never became available")
+          PY
+
+      - name: Apply migrations
+        working-directory: backend
+        run: alembic upgrade head
+
+      - name: Run tests
+        run: pytest -q --cov=backend --cov-report=xml --cov-report=term --cov-fail-under=80
+
+      - name: Upload coverage to Codecov
+        if: matrix.python-version == '3.11'
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.xml
+          fail_ci_if_error: false
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  docker:
+    name: Docker Build & Health Check
+    runs-on: ubuntu-latest
+    needs: tests
+    if: github.event_name != 'pull_request'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t petmatch-backend ./backend
+
+      - name: Run container
+        run: docker run -d --name petmatch-backend -p 8000:8000 petmatch-backend
+
+      - name: Health check
         run: |
           for i in {1..30}; do
-            (echo > /dev/tcp/127.0.0.1/5432) >/dev/null 2>&1 && echo "db up" && break
-            sleep 1
+            if curl -fsS http://localhost:8000/healthz > /dev/null; then
+              echo "Service healthy"
+              exit 0
+            fi
+            sleep 2
           done
+          echo "Service failed health check"
+          docker logs petmatch-backend
+          exit 1
 
-      - name: Migrate
-        run: |
-          python -m alembic upgrade head
-
-      - name: Lint & Typecheck
-        run: |
-          python -m ruff check backend
-          python -m black --check backend
-          python -m mypy backend
-
-      - name: Tests
-        run: |
-          coverage run -m pytest -q
-          coverage report -m
+      - name: Cleanup
+        if: always()
+        run: docker rm -f petmatch-backend
