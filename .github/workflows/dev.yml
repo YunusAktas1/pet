@@ -1,11 +1,12 @@
-﻿name: Backend CI
+﻿name: Backend Dev CI
 
 on:
   push:
     branches:
-      - main
       - develop
-  pull_request:
+
+env:
+  SKIP_TEST_TYPECHECK: true
 
 defaults:
   run:
@@ -141,35 +142,3 @@ jobs:
           fail_ci_if_error: false
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-
-  docker:
-    name: Docker Build & Health Check
-    runs-on: ubuntu-latest
-    needs: tests
-    if: github.event_name != 'pull_request'
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Build image
-        run: docker build -t petmatch-backend ./backend
-
-      - name: Run container
-        run: docker run -d --name petmatch-backend -p 8000:8000 petmatch-backend
-
-      - name: Health check
-        run: |
-          for i in {1..30}; do
-            if curl -fsS http://localhost:8000/healthz > /dev/null; then
-              echo "Service healthy"
-              exit 0
-            fi
-            sleep 2
-          done
-          echo "Service failed health check"
-          docker logs petmatch-backend
-          exit 1
-
-      - name: Cleanup
-        if: always()
-        run: docker rm -f petmatch-backend

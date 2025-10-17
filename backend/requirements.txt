@@ -1,4 +1,4 @@
-fastapi
+﻿fastapi
 uvicorn[standard]
 sqlmodel
 alembic
@@ -10,3 +10,7 @@ passlib[argon2]
 structlog
 email-validator
 python-multipart==0.0.9
+
+# Type checking (development)
+types-pytest
+types-requests
