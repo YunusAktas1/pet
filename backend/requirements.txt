@@ -12,5 +12,4 @@ email-validator
 python-multipart==0.0.9
 
 # Type checking (development)
-types-pytest
 types-requests
