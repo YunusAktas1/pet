@@ -13,3 +13,4 @@ python-multipart==0.0.9
 
 # Type checking (development)
 types-requests
+types-passlib
