@@ -6,7 +6,7 @@ import os
 import pkgutil
 import sys
 from logging.config import fileConfig
-from typing import Iterable
+from collections.abc import Iterable
 
 from alembic import context
 
@@ -50,7 +50,10 @@ def _import_all_models() -> None:
 
     def iter_modules(package) -> Iterable[str]:
         if hasattr(package, "__path__"):
-            for module_info in pkgutil.walk_packages(package.__path__, package.__name__ + "."):
+            for module_info in pkgutil.walk_packages(
+                package.__path__,
+                package.__name__ + ".",
+            ):
                 yield module_info.name
 
     for module_name in iter_modules(models_package):
@@ -60,7 +63,11 @@ def _import_all_models() -> None:
 _import_all_models()
 
 try:
-    model_base = getattr(importlib.import_module("backend.models"), "SQLModel", SQLModel)
+    model_base = getattr(
+        importlib.import_module("backend.models"),
+        "SQLModel",
+        SQLModel,
+    )
 except ModuleNotFoundError:  # pragma: no cover - fallback safeguard
     model_base = SQLModel
 
@@ -96,7 +103,9 @@ def do_run_migrations(connection: Connection) -> None:
 
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode, supporting sync and async engines."""
-    if database_url.startswith(("postgresql+asyncpg", "mysql+asyncmy", "sqlite+aiosqlite")):
+    if database_url.startswith(
+        ("postgresql+asyncpg", "mysql+asyncmy", "sqlite+aiosqlite"),
+    ):
         async def async_run() -> None:
             connectable: AsyncEngine = create_async_engine(
                 database_url,
