@@ -1,0 +1,17 @@
+This directory contains the Alembic migration environment for the backend
+service.
+
+Key files:
+
+* ``env.py`` – configures Alembic to work with SQLModel metadata and reads the
+  ``DATABASE_URL`` environment variable.
+* ``script.py.mako`` – template used when generating new migration revisions.
+* ``versions/`` – stores individual migration scripts.
+
+Typical commands::
+
+    alembic revision --autogenerate -m "describe change"
+    alembic upgrade head
+    alembic downgrade -1
+
+See https://alembic.sqlalchemy.org/ for full documentation.
