@@ -5,20 +5,20 @@ import importlib
 import os
 import pkgutil
 import sys
-from logging.config import fileConfig
 from collections.abc import Iterable
+from logging.config import fileConfig
 
 from alembic import context
+from sqlalchemy import engine_from_config, pool
+from sqlalchemy.engine import Connection
+from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
+from sqlmodel import SQLModel
 
 try:
     from dotenv import load_dotenv
 except ModuleNotFoundError:  # pragma: no cover - optional dependency
     def load_dotenv() -> bool:
         return False
-from sqlalchemy import engine_from_config, pool
-from sqlalchemy.engine import Connection
-from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
-from sqlmodel import SQLModel
 
 # Ensure the project and package roots are importable.
 CURRENT_DIR = os.path.dirname(__file__)
