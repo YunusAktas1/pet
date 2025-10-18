@@ -105,22 +105,19 @@ jobs:
 
       - name: Wait for database
         run: |
-          python - <<'PY'
-          import os, time
-          import psycopg2
-
-          url = os.environ["DATABASE_URL"]
-          for _ in range(30):
-              try:
-                  conn = psycopg2.connect(url)
-              except Exception:
-                  time.sleep(2)
-              else:
-                  conn.close()
-                  break
-          else:
-              raise SystemExit("Database never became available")
-          PY
+          echo "Waiting for PostgreSQL to be ready..."
+          for i in {1..60}; do
+            if pg_isready -h localhost -p 5432 -U postgres > /dev/null 2>&1; then
+              echo "PostgreSQL is ready!"
+              exit 0
+            fi
+            echo "Attempt $i/60: PostgreSQL not ready yet..."
+            sleep 2
+          done
+          echo "PostgreSQL failed to become ready in 120 seconds"
+          exit 1
+        env:
+          PGPASSWORD: postgres
 
       - name: Apply migrations
         working-directory: backend
