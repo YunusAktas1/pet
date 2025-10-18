@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Iterable
 import importlib
 import os
 import pkgutil
 import sys
-from collections.abc import Iterable
 from logging.config import fileConfig
 
 from alembic import context
