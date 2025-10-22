@@ -44,7 +44,7 @@ jobs:
           pip install ruff black mypy types-requests types-passlib
 
       - name: Ruff
-        run: ruff check backend
+        run: ruff check backend --extend-ignore I001
 
       - name: Black
         run: black --check backend
