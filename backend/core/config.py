@@ -4,6 +4,7 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 
+
 class Settings(BaseSettings):
     # ---- App ----
     app_name: str = "PetMatch"
@@ -31,9 +32,10 @@ class Settings(BaseSettings):
     # Pydantic Settings config
     model_config = SettingsConfigDict(
         env_file=str(BASE_DIR / ".env"),  # backend/.env
-        env_prefix="",                    # prefix yok
-        case_sensitive=False,             # .env'de büyük/küçük fark etmez
-        extra="ignore",                   # tanımsız anahtarları yoksay
+        env_prefix="",  # prefix yok
+        case_sensitive=False,  # .env'de büyük/küçük fark etmez
+        extra="ignore",  # tanımsız anahtarları yoksay
     )
+
 
 settings = Settings()
