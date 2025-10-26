@@ -147,7 +147,10 @@ jobs:
         run: docker build -t petmatch-backend ./backend
 
       - name: Run container
-        run: docker run -d --name petmatch-backend -p 8000:8000 petmatch-backend
+        run: |
+          docker run -d --name petmatch-backend -p 8000:8000 \
+            -e DATABASE_URL=postgresql+psycopg2://postgres:postgres@host.docker.internal:5432/petmatch \
+            petmatch-backend
 
       - name: Health check
         run: |
