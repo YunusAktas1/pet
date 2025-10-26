@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     # ---- Media / Photo ----
     MEDIA_DIR: str = "media"
     MEDIA_BASE_URL: str = "/media"
-    PHOTO_ALLOWED: list[str] = [".jpg", ".jpeg", ".png", ".webp"]
+    PHOTO_ALLOWED: list[str] = ["image/jpeg", "image/png", "image/webp"]
     PHOTO_MAX_BYTES: int = 5 * 1024 * 1024  # 5MB
 
     # Pydantic Settings config
