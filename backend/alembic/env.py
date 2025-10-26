@@ -52,7 +52,7 @@ config.set_main_option("sqlalchemy.url", database_url)
 
 def _import_all_models() -> None:
     """Import all modules within backend.models to register SQLModel metadata."""
-    import backend.models as models_package  # noqa: F401
+    import models as models_package  # noqa: F401
 
     def iter_modules(package) -> Iterable[str]:
         if hasattr(package, "__path__"):
@@ -70,7 +70,7 @@ _import_all_models()
 
 try:
     model_base = getattr(
-        importlib.import_module("backend.models"),
+        importlib.import_module("models"),
         "SQLModel",
         SQLModel,
     )
