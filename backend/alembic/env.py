@@ -14,11 +14,14 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from sqlmodel import SQLModel
 
+# Optional dependency; ruff isort bu konuma itiyor
 try:
     from dotenv import load_dotenv
 except ModuleNotFoundError:  # pragma: no cover - optional dependency
+
     def load_dotenv() -> bool:
         return False
+
 
 # Ensure the project and package roots are importable.
 CURRENT_DIR = os.path.dirname(__file__)
@@ -106,6 +109,7 @@ def run_migrations_online() -> None:
     if database_url.startswith(
         ("postgresql+asyncpg", "mysql+asyncmy", "sqlite+aiosqlite"),
     ):
+
         async def async_run() -> None:
             connectable: AsyncEngine = create_async_engine(
                 database_url,
