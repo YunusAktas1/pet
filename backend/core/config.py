@@ -1,7 +1,6 @@
 ﻿# C:\Dev\Yunus\backend\core\config.py
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pathlib import Path
-from typing import List
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 
@@ -27,7 +26,7 @@ class Settings(BaseSettings):
 
     # ---- Other ----
     log_level: str = "info"
-    cors_allow_origins: List[str] = ["*"]
+    cors_allow_origins: list[str] = ["*"]
 
     # Pydantic Settings config
     model_config = SettingsConfigDict(
