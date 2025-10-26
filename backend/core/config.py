@@ -29,6 +29,12 @@ class Settings(BaseSettings):
     log_level: str = "info"
     cors_allow_origins: list[str] = ["*"]
 
+    # ---- Media / Photo ----
+    MEDIA_DIR: str = "media"
+    MEDIA_BASE_URL: str = "/media"
+    PHOTO_ALLOWED: list[str] = [".jpg", ".jpeg", ".png", ".webp"]
+    PHOTO_MAX_BYTES: int = 5 * 1024 * 1024  # 5MB
+
     # Pydantic Settings config
     model_config = SettingsConfigDict(
         env_file=str(BASE_DIR / ".env"),  # backend/.env

@@ -109,6 +109,10 @@ def do_run_migrations(connection: Connection) -> None:
 
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode, supporting sync and async engines."""
+    # Mypy type narrowing: ensure database_url is not None
+    if database_url is None:
+        raise RuntimeError("DATABASE_URL is required for migrations")
+
     if database_url.startswith(
         ("postgresql+asyncpg", "mysql+asyncmy", "sqlite+aiosqlite"),
     ):
