@@ -1,19 +1,9 @@
-﻿from __future__ import annotations
-
-import json
-import os
-from pathlib import Path
-from typing import Any
-
-from pydantic import field_validator
+﻿# C:\Dev\Yunus\backend\core\config.py
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pathlib import Path
+from typing import List
 
-# Allow selecting which .env to read (host vs docker)
-ENV_FILE = os.environ.get(
-    "ENV_FILE",
-    str(Path(__file__).resolve().parent.parent / ".env"),
-)
-
+BASE_DIR = Path(__file__).resolve().parents[1]
 
 class Settings(BaseSettings):
     # ---- App ----
@@ -25,51 +15,26 @@ class Settings(BaseSettings):
     # ---- Security ----
     jwt_secret: str = "dev-secret-change-me"
     jwt_algorithm: str = "HS256"
-    access_token_expire_minutes: int = 60
+    access_token_expire_minutes: int = 60  # .env: ACCESS_TOKEN_EXPIRE_MINUTES
 
-    # ---- DB ----
-    database_url: str = "sqlite:///./dev.db"
+    # Eski kodla uyumluluk (security.py 'jwt_expires_minutes' bekliyor)
+    @property
+    def jwt_expires_minutes(self) -> int:
+        return self.access_token_expire_minutes
+
+    # ---- Database ----
+    database_url: str = f"sqlite:///{(BASE_DIR / 'dev.db').as_posix()}"
 
     # ---- Other ----
     log_level: str = "info"
-    cors_allow_origins: list[str] = ["*"]
-    MEDIA_DIR: str = "media"
-    MEDIA_BASE_URL: str = "/media"
-    PHOTO_MAX_BYTES: int = 2_000_000
-    PHOTO_ALLOWED: tuple[str, ...] = (
-        "image/jpeg",
-        "image/png",
-        "image/webp",
-    )
+    cors_allow_origins: List[str] = ["*"]
 
+    # Pydantic Settings config
     model_config = SettingsConfigDict(
-        env_file=ENV_FILE,
-        env_file_encoding="utf-8",
-        case_sensitive=False,
-        extra="ignore",
+        env_file=str(BASE_DIR / ".env"),  # backend/.env
+        env_prefix="",                    # prefix yok
+        case_sensitive=False,             # .env'de büyük/küçük fark etmez
+        extra="ignore",                   # tanımsız anahtarları yoksay
     )
-
-    # Robust parser for CORS_ALLOW_ORIGINS:
-    # - "", "*"            -> ["*"]
-    # - '["a","b"]' (JSON) -> ["a","b"]
-    # - "a,b,c"            -> ["a","b","c"]
-    @field_validator("cors_allow_origins", mode="before")
-    @classmethod
-    def _parse_cors(cls, v: Any) -> list[str]:
-        if isinstance(v, list):
-            return [str(x).strip() for x in v if str(x).strip()]
-        if not isinstance(v, str):
-            return ["*"]
-        s = v.strip()
-        if not s or s == "*":
-            return ["*"]
-        if s.startswith("["):
-            try:
-                arr = json.loads(s)
-                return [str(x).strip() for x in arr if str(x).strip()]
-            except Exception:
-                pass  # fallback to comma-split
-        return [part.strip() for part in s.split(",") if part.strip()]
-
 
 settings = Settings()

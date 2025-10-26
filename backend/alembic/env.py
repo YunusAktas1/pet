@@ -19,7 +19,7 @@ try:
     from dotenv import load_dotenv
 except ModuleNotFoundError:  # pragma: no cover - optional dependency
 
-    def load_dotenv() -> bool:
+    def load_dotenv(*args, **kwargs) -> bool:  # type: ignore[misc]
         return False
 
 
@@ -43,6 +43,9 @@ if config.config_file_name:
 database_url = os.getenv("DATABASE_URL")
 if not database_url:
     raise RuntimeError("DATABASE_URL environment variable is not set.")
+
+# Type narrowing for mypy
+assert database_url is not None
 
 config.set_main_option("sqlalchemy.url", database_url)
 
