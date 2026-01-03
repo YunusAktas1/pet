@@ -8,7 +8,7 @@ from backend.core.response import ok
 from backend.core.security import hash_password, verify_password
 from backend.models.user import User
 from backend.schemas.auth import AuthResponse, LoginRequest, RefreshRequest, SignupRequest, TokenPairResponse
-from backend.services.auth_service import issue_tokens, rotate_refresh_token
+from backend.services.auth_service import issue_tokens, rotate_refresh_token, revoke_refresh_token
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -52,3 +52,9 @@ def login(payload: LoginRequest, session: SessionDep) -> dict:
 def refresh(payload: RefreshRequest, session: SessionDep) -> dict:
     tokens = rotate_refresh_token(session, payload.refresh_token)
     return ok(TokenPairResponse(**tokens).model_dump())
+
+
+@router.post("/logout")
+def logout(payload: RefreshRequest, session: SessionDep) -> dict:
+    revoke_refresh_token(session, payload.refresh_token)
+    return ok({"ok": True})

@@ -155,3 +155,27 @@ def test_reuse_triggers_global_revocation(client: TestClient) -> None:
         rows = session.exec(select(RefreshToken).where(RefreshToken.user_id == user_id)).all()
         assert rows
         assert all(r.revoked for r in rows)
+
+
+def test_logout_revokes_token(client: TestClient) -> None:
+    email = f"{uuid4().hex}@example.com"
+    password = "StrongPass!234"
+
+    signup_response = client.post(
+        "/api/v1/auth/signup",
+        json={"email": email, "password": password},
+    )
+    assert signup_response.status_code == 200
+    tokens = _extract_tokens(cast(dict[str, Any], signup_response.json()))
+
+    logout_response = client.post(
+        "/api/v1/auth/logout",
+        json={"refresh_token": tokens["refresh_token"]},
+    )
+    assert logout_response.status_code == 200
+
+    reuse_response = client.post(
+        "/api/v1/auth/refresh",
+        json={"refresh_token": tokens["refresh_token"]},
+    )
+    assert reuse_response.status_code == 401

@@ -53,6 +53,40 @@ def _revoke_all_refresh_tokens(session: Session, user_id: int, now: datetime) ->
         row.revoked_at = now
 
 
+def revoke_refresh_token(session: Session, provided_token: str) -> None:
+    now = _now()
+    token_hash = _hash_token(provided_token)
+    token_row = session.exec(
+        select(RefreshToken).where(RefreshToken.token_hash == token_hash)
+    ).first()
+
+    if token_row is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token",
+        )
+
+    expired = False
+    expires_at = token_row.expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if expires_at <= now:
+        expired = True
+
+    if token_row.revoked or token_row.revoked_at is not None or token_row.replaced_by_jti or expired:
+        _revoke_all_refresh_tokens(session, token_row.user_id, now)
+        session.commit()
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token",
+        )
+
+    token_row.revoked = True
+    token_row.revoked_at = now
+    session.add(token_row)
+    session.commit()
+
+
 def issue_tokens(session: Session, user: User) -> dict[str, str]:
     if user.id is None or user.email is None:
         raise HTTPException(
