@@ -41,6 +41,21 @@ def _new_refresh_token(user_id: int) -> tuple[str, RefreshToken]:
     return raw_token, refresh_token
 
 
+def _revoke_all_refresh_tokens(session: Session, user_id: int, now: datetime) -> None:
+    active_tokens = session.exec(
+        select(RefreshToken).where(
+            RefreshToken.user_id == user_id,
+            RefreshToken.revoked.is_(False),
+        )
+    ).all()
+    if not active_tokens:
+        return
+    for row in active_tokens:
+        row.revoked = True
+        row.revoked_at = now
+    session.commit()
+
+
 def issue_tokens(session: Session, user: User) -> dict[str, str]:
     if user.id is None or user.email is None:
         raise HTTPException(
@@ -71,13 +86,21 @@ def rotate_refresh_token(session: Session, provided_token: str) -> dict[str, str
         select(RefreshToken).where(RefreshToken.token_hash == token_hash)
     ).first()
 
-    if token_row is None or token_row.revoked:
+    now = _now()
+
+    if token_row is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid refresh token",
         )
 
-    now = _now()
+    if token_row.revoked or token_row.revoked_at is not None or token_row.replaced_by_jti:
+        _revoke_all_refresh_tokens(session, token_row.user_id, now)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token",
+        )
+
     expires_at = token_row.expires_at
     if expires_at.tzinfo is None:
         expires_at = expires_at.replace(tzinfo=timezone.utc)
@@ -86,6 +109,7 @@ def rotate_refresh_token(session: Session, provided_token: str) -> dict[str, str
         token_row.revoked_at = now
         session.add(token_row)
         session.commit()
+        _revoke_all_refresh_tokens(session, token_row.user_id, now)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Refresh token expired",
@@ -97,6 +121,7 @@ def rotate_refresh_token(session: Session, provided_token: str) -> dict[str, str
         token_row.revoked_at = now
         session.add(token_row)
         session.commit()
+        _revoke_all_refresh_tokens(session, token_row.user_id, now)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found",

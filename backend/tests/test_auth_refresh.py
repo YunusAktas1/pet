@@ -1,5 +1,6 @@
-import os
+﻿import os
 from collections.abc import Iterator
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, cast
 from uuid import uuid4
@@ -108,10 +109,49 @@ def test_refresh_rotation_revokes_old_token(client: TestClient) -> None:
     )
     assert reuse_response.status_code == 401
 
+    # After reuse attempt, all tokens for the user are revoked, so the latest should fail too
     second_refresh = client.post(
         "/api/v1/auth/refresh",
         json={"refresh_token": first_tokens["refresh_token"]},
     )
-    assert second_refresh.status_code == 200, second_refresh.text
-    second_tokens = _extract_tokens(cast(dict[str, Any], second_refresh.json()))
-    assert second_tokens["refresh_token"] != first_tokens["refresh_token"]
+    assert second_refresh.status_code == 401
+
+
+def test_reuse_triggers_global_revocation(client: TestClient) -> None:
+    email = f"{uuid4().hex}@example.com"
+    password = "StrongPass!234"
+
+    signup_response = client.post(
+        "/api/v1/auth/signup",
+        json={"email": email, "password": password},
+    )
+    assert signup_response.status_code == 200
+    tokens = _extract_tokens(cast(dict[str, Any], signup_response.json()))
+
+    second_login = client.post(
+        "/api/v1/auth/login",
+        json={"email": email, "password": password},
+    )
+    assert second_login.status_code == 200
+    _extract_tokens(cast(dict[str, Any], second_login.json()))
+
+    # Manually revoke first token to simulate reuse detection
+    with Session(db_module.engine) as session:
+        row = session.exec(select(RefreshToken).order_by(RefreshToken.id.asc())).first()
+        assert row is not None
+        row.revoked = True
+        row.revoked_at = datetime.now(timezone.utc)
+        session.add(row)
+        session.commit()
+        user_id = row.user_id
+
+    reuse_response = client.post(
+        "/api/v1/auth/refresh",
+        json={"refresh_token": tokens["refresh_token"]},
+    )
+    assert reuse_response.status_code == 401
+
+    with Session(db_module.engine) as session:
+        rows = session.exec(select(RefreshToken).where(RefreshToken.user_id == user_id)).all()
+        assert rows
+        assert all(r.revoked for r in rows)
