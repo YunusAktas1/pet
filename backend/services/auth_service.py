@@ -48,12 +48,9 @@ def _revoke_all_refresh_tokens(session: Session, user_id: int, now: datetime) ->
             RefreshToken.revoked.is_(False),
         )
     ).all()
-    if not active_tokens:
-        return
     for row in active_tokens:
         row.revoked = True
         row.revoked_at = now
-    session.commit()
 
 
 def issue_tokens(session: Session, user: User) -> dict[str, str]:
@@ -81,12 +78,11 @@ def issue_tokens(session: Session, user: User) -> dict[str, str]:
 
 
 def rotate_refresh_token(session: Session, provided_token: str) -> dict[str, str]:
+    now = _now()
     token_hash = _hash_token(provided_token)
     token_row = session.exec(
         select(RefreshToken).where(RefreshToken.token_hash == token_hash)
     ).first()
-
-    now = _now()
 
     if token_row is None:
         raise HTTPException(
@@ -96,6 +92,7 @@ def rotate_refresh_token(session: Session, provided_token: str) -> dict[str, str
 
     if token_row.revoked or token_row.revoked_at is not None or token_row.replaced_by_jti:
         _revoke_all_refresh_tokens(session, token_row.user_id, now)
+        session.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid refresh token",
@@ -108,8 +105,8 @@ def rotate_refresh_token(session: Session, provided_token: str) -> dict[str, str
         token_row.revoked = True
         token_row.revoked_at = now
         session.add(token_row)
-        session.commit()
         _revoke_all_refresh_tokens(session, token_row.user_id, now)
+        session.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Refresh token expired",
@@ -120,8 +117,8 @@ def rotate_refresh_token(session: Session, provided_token: str) -> dict[str, str
         token_row.revoked = True
         token_row.revoked_at = now
         session.add(token_row)
-        session.commit()
         _revoke_all_refresh_tokens(session, token_row.user_id, now)
+        session.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found",
