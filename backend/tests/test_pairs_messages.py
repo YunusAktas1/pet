@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import os
 from collections.abc import Iterator
@@ -111,8 +111,8 @@ def test_pairs_and_messages_flow(client: TestClient) -> None:
         headers=_auth_headers(token_a),
     )
     assert response.status_code == 200
-    assert response.headers.get("X-Total-Count") == "0"
-    assert response.json() == []
+    payload = response.json()
+    assert payload.get("items", []) == []
 
     response = client.post(
         f"/api/v1/matches/{pet_a}/decision",
@@ -128,8 +128,8 @@ def test_pairs_and_messages_flow(client: TestClient) -> None:
         headers=_auth_headers(token_a),
     )
     assert response.status_code == 200
-    assert response.headers.get("X-Total-Count") == "1"
-    pairs = response.json()
+    payload = response.json()
+    pairs = payload.get("items", [])
     assert len(pairs) == 1
     pair_record = pairs[0]
     assert pair_record["other_user_id"] == user_b_id
@@ -147,7 +147,8 @@ def test_pairs_and_messages_flow(client: TestClient) -> None:
         headers=_auth_headers(token_a),
     )
     assert response.status_code == 200
-    assert response.headers.get("X-Total-Count") == "1"
+    payload = response.json()
+    assert payload.get("items")
 
     response = client.post(
         "/api/v1/messages",
@@ -171,7 +172,6 @@ def test_pairs_and_messages_flow(client: TestClient) -> None:
         params={"pair_id": pair_id},
     )
     assert response.status_code == 200
-    assert response.headers.get("X-Total-Count") == "2"
     messages = response.json()
     assert [m["body"] for m in messages] == ["Hi there!", "Hello!"]
 

@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import os
 from collections.abc import Iterator
@@ -117,11 +117,11 @@ def test_mutual_likes_create_pair_once(client: TestClient) -> None:
     pairs_response = client.get(
         "/api/v1/pairs",
         headers=_auth_headers(token_a),
-        params={"limit": 10, "offset": 0},
+        params={"limit": 10},
     )
     assert pairs_response.status_code == 200
-    assert pairs_response.headers.get("X-Total-Count") == "1"
-    pairs = pairs_response.json()
+    payload = pairs_response.json()
+    pairs = payload.get("items", [])
     assert len(pairs) == 1
     assert pairs[0]["other_user_id"] == user_b_id
 
@@ -135,8 +135,9 @@ def test_mutual_likes_create_pair_once(client: TestClient) -> None:
     repeat_pairs = client.get(
         "/api/v1/pairs",
         headers=_auth_headers(token_a),
-        params={"limit": 10, "offset": 0},
+        params={"limit": 10},
     )
     assert repeat_pairs.status_code == 200
-    assert repeat_pairs.headers.get("X-Total-Count") == "1"
-    assert len(repeat_pairs.json()) == 1
+    payload = repeat_pairs.json()
+    pairs_again = payload.get("items", [])
+    assert len(pairs_again) == 1

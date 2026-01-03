@@ -197,3 +197,69 @@ def test_matches_pagination(client: TestClient) -> None:
     assert len(page_two["items"]) >= 1
     second_ids = {m["id"] for m in page_two["items"]}
     assert first_ids.isdisjoint(second_ids)
+
+
+def test_pairs_pagination(client: TestClient) -> None:
+    password = "StrongPass123$"
+    owner_email = f"pairs-owner-{uuid4().hex}@example.com"
+    _signup(client, owner_email, password)
+    owner_token = _login(client, owner_email, password)
+
+    owner_pet_response = client.post(
+        "/api/v1/pets",
+        headers={"Authorization": f"Bearer {owner_token}"},
+        json={"name": "Owner", "species": "cat", "gender": Gender.female.value},
+    )
+    assert owner_pet_response.status_code == 200, owner_pet_response.text
+    owner_pet_id = owner_pet_response.json()["id"]
+
+    other_tokens = []
+    for idx in range(3):
+        email = f"pairs-other-{idx}-{uuid4().hex[:6]}@example.com"
+        _signup(client, email, password)
+        token = _login(client, email, password)
+        other_tokens.append(token)
+        pet_resp = client.post(
+            "/api/v1/pets",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"name": f"Other-{idx}", "species": "cat", "gender": Gender.male.value},
+        )
+        assert pet_resp.status_code == 200, pet_resp.text
+        other_pet_id = pet_resp.json()["id"]
+
+        like_resp = client.post(
+            f"/api/v1/matches/{other_pet_id}/decision",
+            headers={"Authorization": f"Bearer {owner_token}"},
+            json={"decision": "liked"},
+        )
+        assert like_resp.status_code == 200, like_resp.text
+
+        like_back = client.post(
+            f"/api/v1/matches/{owner_pet_id}/decision",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"decision": "liked"},
+        )
+        assert like_back.status_code == 200, like_back.text
+
+    list_response = client.get(
+        "/api/v1/pairs",
+        headers={"Authorization": f"Bearer {owner_token}"},
+        params={"limit": 2},
+    )
+    assert list_response.status_code == 200, list_response.text
+    page_one = list_response.json()
+    assert page_one["limit"] == 2
+    assert len(page_one.get("items", [])) == 2
+    assert page_one["next_cursor"]
+
+    list_response = client.get(
+        "/api/v1/pairs",
+        headers={"Authorization": f"Bearer {owner_token}"},
+        params={"limit": 2, "cursor": page_one["next_cursor"]},
+    )
+    assert list_response.status_code == 200, list_response.text
+    page_two = list_response.json()
+    ids_one = {item["id"] for item in page_one.get("items", [])}
+    ids_two = {item["id"] for item in page_two.get("items", [])}
+    assert ids_one.isdisjoint(ids_two)
+    assert page_two.get("next_cursor") is None

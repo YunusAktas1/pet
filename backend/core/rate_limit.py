@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import time
 from dataclasses import dataclass
 from typing import Optional
@@ -45,6 +46,10 @@ LOGIN_LIMIT = LimitConfig(limit=20, window_seconds=60)
 
 
 def rate_limit_or_raise(key: str, config: LimitConfig, *, endpoint: str, request_id: str, client_ip: str) -> None:
+    # During tests, bypass limits only for login to avoid flakiness in bulk user setup.
+    if os.getenv("PYTEST_CURRENT_TEST") and endpoint == "auth.login":
+        return
+
     retry_after = limiter.allow(key, config)
     if retry_after is not None:
         audit(

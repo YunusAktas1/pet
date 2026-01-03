@@ -118,11 +118,11 @@ def test_decide_auto_creates_match_and_pair(client: TestClient) -> None:
     pairs_response = client.get(
         "/api/v1/pairs",
         headers=_auth_headers(token_a),
-        params={"limit": 10, "offset": 0},
+        params={"limit": 10},
     )
     assert pairs_response.status_code == 200
-    assert pairs_response.headers.get("X-Total-Count") == "1"
-    pairs = pairs_response.json()
+    payload = pairs_response.json()
+    pairs = payload.get("items", [])
     assert len(pairs) == 1
     assert pairs[0]["other_user_id"] == user_b_id
 
@@ -136,8 +136,9 @@ def test_decide_auto_creates_match_and_pair(client: TestClient) -> None:
     pairs_after = client.get(
         "/api/v1/pairs",
         headers=_auth_headers(token_a),
-        params={"limit": 10, "offset": 0},
+        params={"limit": 10},
     )
     assert pairs_after.status_code == 200
-    assert pairs_after.headers.get("X-Total-Count") == "1"
-    assert len(pairs_after.json()) == 1
+    payload = pairs_after.json()
+    pairs_again = payload.get("items", [])
+    assert len(pairs_again) == 1

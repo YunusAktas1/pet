@@ -3,9 +3,10 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from sqlalchemy import select
+from sqlalchemy import and_, desc, or_, select
 from sqlmodel import Session
 
+from backend.core.pagination import encode_cursor
 from backend.models.match import Match, MatchDecision
 from backend.models.pair import Pair
 from backend.models.pet import Pet
@@ -86,19 +87,27 @@ def list_pairs_for_user(
     user_id: int,
     *,
     limit: int,
-    offset: int,
-) -> tuple[list[dict[str, object]], int]:
-    pairs_stmt: Any = select(Pair)
-    pairs = cast(list[Pair], session.exec(pairs_stmt).scalars().all())
-    filtered = [
-        pair
-        for pair in pairs
-        if pair.user_low_id == user_id or pair.user_high_id == user_id
-    ]
-    filtered.sort(key=lambda pair: pair.created_at, reverse=True)
-    total_count = len(filtered)
+    cursor: dict | None = None,
+) -> tuple[list[dict[str, object]], str | None]:
+    stmt: Any = select(Pair).where(
+        or_(Pair.user_low_id == user_id, Pair.user_high_id == user_id)
+    )
 
-    page = filtered[offset : offset + limit]
+    if cursor:
+        cur_created = cursor.get("created_at")
+        cur_id = cursor.get("id")
+        if cur_created is not None and cur_id is not None:
+            stmt = stmt.where(
+                (Pair.created_at < cur_created)
+                | (and_(Pair.created_at == cur_created, Pair.id < int(cur_id)))
+            )
+
+    stmt = stmt.order_by(desc(Pair.created_at), desc(Pair.id))
+    stmt = stmt.limit(limit + 1)
+
+    pairs = cast(list[Pair], session.exec(stmt).scalars().all())
+    has_more = len(pairs) > limit
+    page = pairs[:limit]
 
     items: list[dict[str, object]] = []
     for pair in page:
@@ -112,4 +121,15 @@ def list_pairs_for_user(
                 "created_at": pair.created_at,
             }
         )
-    return items, total_count
+
+    next_cursor: str | None = None
+    if has_more and page:
+        last = page[-1]
+        next_cursor = encode_cursor(
+            {
+                "created_at": last.created_at.isoformat(),
+                "id": last.id,
+            }
+        )
+
+    return items, next_cursor
