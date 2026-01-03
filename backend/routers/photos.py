@@ -8,13 +8,13 @@ from fastapi import (
     File,
     HTTPException,
     Query,
-    Response,
     UploadFile,
     status,
 )
 from sqlmodel import Session
 
 from backend.core.db import get_session
+from backend.core.pagination import decode_cursor, parse_cursor_datetime, parse_limit
 from backend.models.pet import Pet
 from backend.models.user import User
 from backend.routers.pets import get_current_user
@@ -73,20 +73,35 @@ def upload_pet_photo(
     return PhotoOut.model_validate(photo, from_attributes=True)
 
 
-@router.get("/pets/{pet_id}/photos", response_model=list[PhotoOut])
+@router.get("/pets/{pet_id}/photos")
 def get_pet_photos(
     pet_id: int,
     session: SessionDep,
     current: CurrentUserDep,
-    response: Response,
-    limit: Annotated[int, Query(ge=1, le=100)] = 20,
-    offset: Annotated[int, Query(ge=0)] = 0,
-) -> list[PhotoOut]:
+    limit: Annotated[int | None, Query(ge=1, le=100)] = 20,
+    cursor: Annotated[str | None, Query()] = None,
+) -> dict:
     user_id = _require_user_id(current)
     _assert_pet_owner(session, pet_id, user_id)
-    photos, total = list_photos(session, pet_id=pet_id, limit=limit, offset=offset)
-    response.headers["X-Total-Count"] = str(total)
-    return [PhotoOut.model_validate(photo, from_attributes=True) for photo in photos]
+
+    parsed_limit = parse_limit(limit, default=20, max_limit=100)
+    parsed_cursor = None
+    if cursor:
+        payload = decode_cursor(cursor)
+        payload["created_at"] = parse_cursor_datetime(str(payload.get("created_at")))
+        parsed_cursor = payload
+
+    photos, next_cursor = list_photos(
+        session,
+        pet_id=pet_id,
+        limit=parsed_limit,
+        cursor=parsed_cursor,
+    )
+    return {
+        "items": [PhotoOut.model_validate(photo, from_attributes=True) for photo in photos],
+        "next_cursor": next_cursor,
+        "limit": parsed_limit,
+    }
 
 
 @router.delete("/photos/{photo_id}", status_code=status.HTTP_204_NO_CONTENT)

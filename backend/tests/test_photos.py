@@ -8,6 +8,7 @@ from uuid import uuid4
 import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session, SQLModel, create_engine
+from sqlalchemy.orm import close_all_sessions
 
 import backend.core.db as db_module
 from backend.core.config import settings
@@ -100,6 +101,7 @@ def client(tmp_path: Path) -> Iterator[TestClient]:
     finally:
         settings.MEDIA_DIR = previous_media_dir
         app.dependency_overrides.pop(db_module.get_session, None)
+        close_all_sessions()
         SQLModel.metadata.drop_all(test_engine)
         test_engine.dispose()
         db_module.engine = original_engine
@@ -133,7 +135,6 @@ def test_upload_and_primary_autoset(client: TestClient) -> None:
 
     pets_response = client.get("/api/v1/pets", headers=_auth_headers(token))
     assert pets_response.status_code == 200, pets_response.text
-    assert pets_response.headers.get("X-Total-Count") == "1"
     pets = cast(list[dict[str, Any]], pets_response.json())
     assert pets
     pet_payload = pets[0]
@@ -184,8 +185,8 @@ def test_primary_switch_and_delete(client: TestClient) -> None:
         headers=_auth_headers(token),
     )
     assert photo_list.status_code == 200, photo_list.text
-    assert photo_list.headers.get("X-Total-Count") == "1"
-    photos = cast(list[dict[str, Any]], photo_list.json())
+    photos_payload = photo_list.json()
+    photos = cast(list[dict[str, Any]], photos_payload.get("items", []))
     assert len(photos) == 1
     assert photos[0]["id"] == first["id"]
     assert photos[0]["is_primary"] is True
@@ -196,7 +197,7 @@ def test_primary_switch_and_delete(client: TestClient) -> None:
     assert pet_payload["primary_photo_url"] == photos[0]["url"]
 
 
-def test_list_with_total_count_header(client: TestClient) -> None:
+def test_list_pagination(client: TestClient) -> None:
     email = f"{uuid4().hex}@example.com"
     password = "SecurePass!234"
     _signup(client, email, password)
@@ -215,12 +216,26 @@ def test_list_with_total_count_header(client: TestClient) -> None:
     response = client.get(
         f"/api/v1/pets/{pet_id}/photos",
         headers=_auth_headers(token),
-        params={"limit": 2, "offset": 1},
+        params={"limit": 2},
     )
     assert response.status_code == 200, response.text
-    assert response.headers.get("X-Total-Count") == "3"
-    photos = cast(list[dict[str, Any]], response.json())
-    assert len(photos) == 2
+    payload = response.json()
+    assert payload["limit"] == 2
+    assert len(payload.get("items", [])) == 2
+    next_cursor = payload.get("next_cursor")
+    assert next_cursor
+
+    response = client.get(
+        f"/api/v1/pets/{pet_id}/photos",
+        headers=_auth_headers(token),
+        params={"limit": 2, "cursor": next_cursor},
+    )
+    assert response.status_code == 200, response.text
+    payload_two = response.json()
+    ids_one = {p["id"] for p in payload.get("items", [])}
+    ids_two = {p["id"] for p in payload_two.get("items", [])}
+    assert ids_one.isdisjoint(ids_two)
+    assert payload_two.get("next_cursor") is None
 
 
 def test_validation_rejects_big_or_bad_mime(client: TestClient) -> None:

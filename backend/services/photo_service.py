@@ -7,11 +7,12 @@ from typing import cast
 from uuid import uuid4
 
 from fastapi import HTTPException, UploadFile, status
-from sqlalchemy import desc, func
+from sqlalchemy import and_, desc, func
 from sqlalchemy.sql.schema import Table
 from sqlmodel import Session, select
 
 from backend.core.config import settings
+from backend.core.pagination import encode_cursor
 from backend.models.pet import Pet
 from backend.models.photo import Photo
 
@@ -126,25 +127,41 @@ def save_photo(session: Session, pet_id: int, file: UploadFile) -> Photo:
 def list_photos(
     session: Session,
     pet_id: int,
+    *,
     limit: int,
-    offset: int,
-) -> tuple[list[Photo], int]:
+    cursor: dict | None = None,
+) -> tuple[list[Photo], str | None]:
     _validate_pet_exists(session, pet_id)
 
-    total_result = session.exec(
-        select(func.count(PHOTO_TABLE.c.id)).where(PHOTO_TABLE.c.pet_id == pet_id)
-    )
-    total_count = int(total_result.first() or 0)
+    statement = select(Photo).where(PHOTO_TABLE.c.pet_id == pet_id)
 
-    statement = (
-        select(Photo)
-        .where(PHOTO_TABLE.c.pet_id == pet_id)
-        .order_by(desc(PHOTO_TABLE.c.created_at))
-        .offset(offset)
-        .limit(limit)
-    )
+    if cursor:
+        cur_created = cursor.get("created_at")
+        cur_id = cursor.get("id")
+        if cur_created is not None and cur_id is not None:
+            statement = statement.where(
+                (PHOTO_TABLE.c.created_at < cur_created)
+                | (and_(PHOTO_TABLE.c.created_at == cur_created, PHOTO_TABLE.c.id < int(cur_id)))
+            )
+
+    statement = statement.order_by(desc(PHOTO_TABLE.c.created_at), desc(PHOTO_TABLE.c.id))
+    statement = statement.limit(limit + 1)
     photos = list(session.exec(statement).all())
-    return photos, total_count
+
+    has_more = len(photos) > limit
+    page = photos[:limit]
+
+    next_cursor: str | None = None
+    if has_more and page:
+        last = page[-1]
+        next_cursor = encode_cursor(
+            {
+                "created_at": last.created_at.isoformat(),
+                "id": last.id,
+            }
+        )
+
+    return page, next_cursor
 
 
 def _ensure_owner(pet: Pet, current_user_id: int) -> None:

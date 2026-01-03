@@ -345,3 +345,51 @@ def test_messages_pagination(client: TestClient) -> None:
     ids_two = {m["id"] for m in page_two.get("items", [])}
     assert ids_one.isdisjoint(ids_two)
     assert page_two.get("next_cursor") is None
+
+
+
+def test_photos_pagination(client: TestClient) -> None:
+    password = "StrongPass123$"
+    email = f"photos-{uuid4().hex}@example.com"
+
+    _signup(client, email, password)
+    token = _login(client, email, password)
+
+    pet_resp = client.post(
+        "/api/v1/pets",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"name": "Pet", "species": "cat", "gender": Gender.male.value},
+    )
+    assert pet_resp.status_code == 200, pet_resp.text
+    pet_id = pet_resp.json()["id"]
+
+    for idx in range(3):
+        resp = client.post(
+            f"/api/v1/pets/{pet_id}/photos",
+            headers={"Authorization": f"Bearer {token}"},
+            files={"file": (f"p{idx}.jpg", b"\xff\xd8\xff" + bytes([idx]), "image/jpeg")},
+        )
+        assert resp.status_code == 201, resp.text
+
+    list_resp = client.get(
+        f"/api/v1/pets/{pet_id}/photos",
+        headers={"Authorization": f"Bearer {token}"},
+        params={"limit": 2},
+    )
+    assert list_resp.status_code == 200, list_resp.text
+    page_one = list_resp.json()
+    assert page_one["limit"] == 2
+    assert len(page_one.get("items", [])) == 2
+    assert page_one["next_cursor"]
+
+    list_resp = client.get(
+        f"/api/v1/pets/{pet_id}/photos",
+        headers={"Authorization": f"Bearer {token}"},
+        params={"limit": 2, "cursor": page_one["next_cursor"]},
+    )
+    assert list_resp.status_code == 200, list_resp.text
+    page_two = list_resp.json()
+    ids_one = {p["id"] for p in page_one.get("items", [])}
+    ids_two = {p["id"] for p in page_two.get("items", [])}
+    assert ids_one.isdisjoint(ids_two)
+    assert page_two.get("next_cursor") is None
