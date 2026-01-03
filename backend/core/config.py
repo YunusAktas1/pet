@@ -1,4 +1,6 @@
 from pathlib import Path
+import os
+import sys
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -17,7 +19,7 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 30  # .env: ACCESS_TOKEN_EXPIRE_MINUTES
     refresh_token_expire_days: int = 14  # .env: REFRESH_TOKEN_EXPIRE_DAYS
-    refresh_token_hmac_secret: str = "dev-refresh-hmac-secret"  # .env: REFRESH_TOKEN_HMAC_SECRET
+    refresh_token_hmac_secret: str | None = None  # .env: REFRESH_TOKEN_HMAC_SECRET (required)
 
     # Backward compatibility (security.py expects jwt_expires_minutes)
     @property
@@ -47,3 +49,13 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+_MIN_HMAC_LEN = 32
+secret = settings.refresh_token_hmac_secret or ""
+if len(secret) < _MIN_HMAC_LEN:
+    # Allow tests to proceed with a clearly marked fallback when pytest is running
+    if os.environ.get("PYTEST_CURRENT_TEST") or "pytest" in sys.modules:
+        settings.refresh_token_hmac_secret = "test-refresh-hmac-secret-32-bytes-minimum!"
+    else:
+        raise ValueError(
+            "REFRESH_TOKEN_HMAC_SECRET must be set and at least 32 characters long for refresh token HMAC",
+        )
