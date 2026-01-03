@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 
 from sqlalchemy import Column
@@ -33,7 +33,7 @@ class Pet(PetBase, table=True):
         default=Gender.unknown,
         sa_column=Column(SQLEnum(Gender, name="gender"), nullable=False),
     )
-    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
 
 
 class PetCreate(PetBase):

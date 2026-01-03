@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import cast
 
 from fastapi import HTTPException, status
@@ -186,7 +186,7 @@ def generate_matches(
         return 0, []
 
     created = 0
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     for pet in candidates:
         pet_id = pet.id
         if pet_id is None or pet_id in existing_ids:

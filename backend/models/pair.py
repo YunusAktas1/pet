@@ -1,6 +1,6 @@
 ﻿from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import UniqueConstraint
 from sqlmodel import Field, SQLModel
@@ -15,7 +15,7 @@ class Pair(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     user_low_id: int = Field(foreign_key="user.id", nullable=False, index=True)
     user_high_id: int = Field(foreign_key="user.id", nullable=False, index=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
 
 
 class PairOut(SQLModel):

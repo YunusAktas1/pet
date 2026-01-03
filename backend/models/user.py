@@ -1,5 +1,5 @@
 ﻿# C:\Dev\Yunus\backend\models\user.py
-from datetime import datetime
+from datetime import datetime, timezone
 
 import sqlalchemy as sa
 from sqlmodel import Field, SQLModel
@@ -13,4 +13,4 @@ class User(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     email: str = Field(index=True)
     password_hash: str
-    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)

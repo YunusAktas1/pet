@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlmodel import Field, SQLModel
 
@@ -14,5 +14,5 @@ class RefreshToken(SQLModel, table=True):
     token_hash: str = Field(index=True, unique=True, nullable=False, max_length=64)
     revoked: bool = Field(default=False, nullable=False)
 
-    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
     expires_at: datetime = Field(nullable=False, index=True)

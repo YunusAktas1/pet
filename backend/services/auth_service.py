@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
 from sqlmodel import Session, select
@@ -14,7 +14,7 @@ from backend.models.user import User
 
 
 def _now() -> datetime:
-    return datetime.utcnow()
+    return datetime.now(timezone.utc)
 
 
 def _hash_token(raw_token: str) -> str:
@@ -70,7 +70,10 @@ def rotate_refresh_token(session: Session, provided_token: str) -> dict[str, str
         )
 
     now = _now()
-    if token_row.expires_at <= now:
+    expires_at = token_row.expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if expires_at <= now:
         token_row.revoked = True
         session.add(token_row)
         session.commit()

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import Column, ForeignKey, Index, Integer, desc
 from sqlmodel import Field, SQLModel
@@ -26,4 +26,4 @@ class Photo(SQLModel, table=True):
     size_bytes: int = Field(nullable=False)
     url: str = Field(nullable=False)
     is_primary: bool = Field(default=False, nullable=False)
-    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)

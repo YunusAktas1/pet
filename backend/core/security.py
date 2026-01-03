@@ -1,7 +1,7 @@
 ﻿from __future__ import annotations
 
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, cast
 
@@ -36,7 +36,7 @@ def verify_password(raw: str, hashed: str) -> bool:
 
 def create_access_token(sub: str, *, minutes: int | None = None) -> str:
     minutes = minutes or settings.access_token_expire_minutes
-    expire = datetime.utcnow() + timedelta(minutes=minutes)
+    expire = datetime.now(timezone.utc) + timedelta(minutes=minutes)
     payload: dict[str, Any] = {"sub": sub, "exp": expire}
     token = jwt.encode(payload, settings.jwt_secret, algorithm=_ALGO)
     return token
