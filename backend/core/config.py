@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 30  # .env: ACCESS_TOKEN_EXPIRE_MINUTES
     refresh_token_expire_days: int = 14  # .env: REFRESH_TOKEN_EXPIRE_DAYS
+    refresh_token_hmac_secret: str = "dev-refresh-hmac-secret"  # .env: REFRESH_TOKEN_HMAC_SECRET
 
     # Backward compatibility (security.py expects jwt_expires_minutes)
     @property

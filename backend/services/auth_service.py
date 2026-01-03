@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -23,7 +24,8 @@ def _new_jti() -> str:
 
 
 def _hash_token(raw_token: str) -> str:
-    return hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+    secret = settings.refresh_token_hmac_secret.encode("utf-8")
+    return hmac.new(secret, raw_token.encode("utf-8"), hashlib.sha256).hexdigest()
 
 
 def _new_refresh_token(user_id: int) -> tuple[str, RefreshToken]:
