@@ -263,3 +263,85 @@ def test_pairs_pagination(client: TestClient) -> None:
     ids_two = {item["id"] for item in page_two.get("items", [])}
     assert ids_one.isdisjoint(ids_two)
     assert page_two.get("next_cursor") is None
+
+
+def test_messages_pagination(client: TestClient) -> None:
+    password = "StrongPass123$"
+    email_a = f"msg-a-{uuid4().hex}@example.com"
+    email_b = f"msg-b-{uuid4().hex}@example.com"
+
+    _signup(client, email_a, password)
+    _signup(client, email_b, password)
+
+    token_a = _login(client, email_a, password)
+    token_b = _login(client, email_b, password)
+
+    pet_a_resp = client.post(
+        "/api/v1/pets",
+        headers={"Authorization": f"Bearer {token_a}"},
+        json={"name": "PetA", "species": "cat", "gender": Gender.female.value},
+    )
+    assert pet_a_resp.status_code == 200, pet_a_resp.text
+    pet_a_id = pet_a_resp.json()["id"]
+
+    pet_b_resp = client.post(
+        "/api/v1/pets",
+        headers={"Authorization": f"Bearer {token_b}"},
+        json={"name": "PetB", "species": "cat", "gender": Gender.male.value},
+    )
+    assert pet_b_resp.status_code == 200, pet_b_resp.text
+    pet_b_id = pet_b_resp.json()["id"]
+
+    like_ab = client.post(
+        f"/api/v1/matches/{pet_b_id}/decision",
+        headers={"Authorization": f"Bearer {token_a}"},
+        json={"decision": "liked"},
+    )
+    assert like_ab.status_code == 200, like_ab.text
+
+    like_ba = client.post(
+        f"/api/v1/matches/{pet_a_id}/decision",
+        headers={"Authorization": f"Bearer {token_b}"},
+        json={"decision": "liked"},
+    )
+    assert like_ba.status_code == 200, like_ba.text
+
+    pairs_resp = client.get(
+        "/api/v1/pairs",
+        headers={"Authorization": f"Bearer {token_a}"},
+    )
+    assert pairs_resp.status_code == 200, pairs_resp.text
+    pairs_payload = pairs_resp.json()
+    pair_id = pairs_payload["items"][0]["id"]
+
+    bodies = ["msg1", "msg2", "msg3"]
+    for body in bodies:
+        resp = client.post(
+            "/api/v1/messages",
+            headers={"Authorization": f"Bearer {token_a}"},
+            json={"pair_id": pair_id, "body": body},
+        )
+        assert resp.status_code == 200, resp.text
+
+    list_resp = client.get(
+        "/api/v1/messages",
+        headers={"Authorization": f"Bearer {token_a}"},
+        params={"pair_id": pair_id, "limit": 2},
+    )
+    assert list_resp.status_code == 200, list_resp.text
+    page_one = list_resp.json()
+    assert page_one["limit"] == 2
+    assert len(page_one.get("items", [])) == 2
+    assert page_one["next_cursor"]
+
+    list_resp = client.get(
+        "/api/v1/messages",
+        headers={"Authorization": f"Bearer {token_a}"},
+        params={"pair_id": pair_id, "limit": 2, "cursor": page_one["next_cursor"]},
+    )
+    assert list_resp.status_code == 200, list_resp.text
+    page_two = list_resp.json()
+    ids_one = {m["id"] for m in page_one.get("items", [])}
+    ids_two = {m["id"] for m in page_two.get("items", [])}
+    assert ids_one.isdisjoint(ids_two)
+    assert page_two.get("next_cursor") is None

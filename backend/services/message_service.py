@@ -3,16 +3,17 @@ from __future__ import annotations
 from typing import cast
 
 from fastapi import HTTPException, status
-from sqlalchemy import asc, func
+from sqlalchemy import and_, desc, select
 from sqlalchemy.sql.schema import Table
-from sqlmodel import Session, select
+from sqlmodel import Session
 
+from backend.core.pagination import encode_cursor
 from backend.models.message import Message
 from backend.models.pair import Pair
 
 
 def _get_pair(pair_id: int, session: Session) -> Pair | None:
-    return session.exec(select(Pair).where(Pair.id == pair_id)).first()
+    return session.exec(select(Pair).where(Pair.id == pair_id)).scalars().first()
 
 
 def _validate_participant(pair: Pair, user_id: int) -> None:
@@ -60,9 +61,9 @@ def list_messages(
     requester_user_id: int,
     *,
     limit: int,
-    offset: int,
+    cursor: dict | None,
     session: Session,
-) -> tuple[int, list[Message]]:
+) -> tuple[list[Message], str | None]:
     pair = _get_pair(pair_id, session)
     if pair is None:
         raise HTTPException(
@@ -76,22 +77,32 @@ def list_messages(
         Message.__table__,  # type: ignore[attr-defined]
     )
 
-    count_statement = (
-        select(func.count())
-        .select_from(message_table)
-        .where(message_table.c.pair_id == pair_id)
-    )
-    total_result = session.exec(count_statement).one()
-    total_count = int(
-        total_result[0] if isinstance(total_result, tuple) else total_result
-    )
+    statement = select(Message).where(message_table.c.pair_id == pair_id)
 
-    statement = (
-        select(Message)
-        .where(Message.pair_id == pair_id)
-        .order_by(asc(message_table.c.created_at))
-        .offset(offset)
-        .limit(limit)
-    )
-    messages = list(session.exec(statement).all())
-    return total_count, messages
+    if cursor:
+        cur_created = cursor.get("created_at")
+        cur_id = cursor.get("id")
+        if cur_created is not None and cur_id is not None:
+            statement = statement.where(
+                (message_table.c.created_at < cur_created)
+                | (and_(message_table.c.created_at == cur_created, message_table.c.id < int(cur_id)))
+            )
+
+    statement = statement.order_by(desc(message_table.c.created_at), desc(message_table.c.id))
+    statement = statement.limit(limit + 1)
+    messages = list(session.exec(statement).scalars().all())
+
+    has_more = len(messages) > limit
+    page = messages[:limit]
+
+    next_cursor: str | None = None
+    if has_more and page:
+        last = page[-1]
+        next_cursor = encode_cursor(
+            {
+                "created_at": last.created_at.isoformat(),
+                "id": last.id,
+            }
+        )
+
+    return page, next_cursor

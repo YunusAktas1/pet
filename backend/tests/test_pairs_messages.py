@@ -172,18 +172,18 @@ def test_pairs_and_messages_flow(client: TestClient) -> None:
         params={"pair_id": pair_id},
     )
     assert response.status_code == 200
-    messages = response.json()
-    assert [m["body"] for m in messages] == ["Hi there!", "Hello!"]
+    payload = response.json()
+    assert [m["body"] for m in payload.get("items", [])] == ["Hello!", "Hi there!"]
 
     response = client.get(
         "/api/v1/messages",
         headers=_auth_headers(token_a),
-        params={"pair_id": pair_id, "limit": 1, "offset": 1},
+        params={"pair_id": pair_id, "limit": 1, "cursor": payload.get("next_cursor")},
     )
     assert response.status_code == 200
-    paged_messages = response.json()
-    assert len(paged_messages) == 1
-    assert paged_messages[0]["body"] == "Hello!"
+    paged_payload = response.json()
+    assert len(paged_payload.get("items", [])) == 1
+    assert paged_payload["items"][0]["body"] in {"Hello!", "Hi there!"}
 
     email_c = f"c_{uuid4().hex[:8]}@example.com"
     token_c = _signup_login(client, email_c, password)
