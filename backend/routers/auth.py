@@ -1,24 +1,22 @@
-﻿from typing import Annotated
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
 
 from backend.core.db import get_session
-from backend.core.security import (
-    create_access_token,
-    hash_password,
-    verify_password,
-)
+from backend.core.response import ok
+from backend.core.security import hash_password, verify_password
 from backend.models.user import User
-from backend.schemas.auth import LoginRequest, SignupRequest, TokenResponse
+from backend.schemas.auth import AuthResponse, LoginRequest, RefreshRequest, SignupRequest, TokenPairResponse
+from backend.services.auth_service import issue_tokens, rotate_refresh_token
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 SessionDep = Annotated[Session, Depends(get_session)]
 
 
-@router.post("/signup", response_model=TokenResponse)
-def signup(payload: SignupRequest, session: SessionDep) -> TokenResponse:
+@router.post("/signup", response_model=AuthResponse)
+def signup(payload: SignupRequest, session: SessionDep) -> dict:
     statement = select(User).where(User.email == payload.email)
     exists = session.exec(statement).first()
     if exists:
@@ -31,11 +29,13 @@ def signup(payload: SignupRequest, session: SessionDep) -> TokenResponse:
     session.add(user)
     session.commit()
     session.refresh(user)
-    return TokenResponse(access_token=create_access_token(sub=user.email))
+
+    tokens = issue_tokens(session, user)
+    return ok(TokenPairResponse(**tokens).model_dump())
 
 
-@router.post("/login", response_model=TokenResponse)
-def login(payload: LoginRequest, session: SessionDep) -> TokenResponse:
+@router.post("/login", response_model=AuthResponse)
+def login(payload: LoginRequest, session: SessionDep) -> dict:
     statement = select(User).where(User.email == payload.email)
     user = session.exec(statement).first()
     if not user or not verify_password(payload.password, user.password_hash):
@@ -43,4 +43,12 @@ def login(payload: LoginRequest, session: SessionDep) -> TokenResponse:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials",
         )
-    return TokenResponse(access_token=create_access_token(sub=user.email))
+
+    tokens = issue_tokens(session, user)
+    return ok(TokenPairResponse(**tokens).model_dump())
+
+
+@router.post("/refresh", response_model=AuthResponse)
+def refresh(payload: RefreshRequest, session: SessionDep) -> dict:
+    tokens = rotate_refresh_token(session, payload.refresh_token)
+    return ok(TokenPairResponse(**tokens).model_dump())

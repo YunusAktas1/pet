@@ -3,6 +3,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
+from backend.core.response import ApiResponse
+
 
 class SignupRequest(BaseModel):
     email: EmailStr
@@ -14,9 +16,18 @@ class LoginRequest(BaseModel):
     password: str = Field(min_length=1, max_length=256)
 
 
-class TokenResponse(BaseModel):
+class RefreshRequest(BaseModel):
+    refresh_token: str = Field(min_length=1, max_length=2048)
+
+
+class TokenPairResponse(BaseModel):
     access_token: str
+    refresh_token: str
     token_type: Literal["bearer"] = "bearer"
+
+
+class AuthResponse(ApiResponse):
+    data: TokenPairResponse | None = None
 
 
 class UserRead(BaseModel):
@@ -24,5 +35,5 @@ class UserRead(BaseModel):
     email: EmailStr
     created_at: datetime
 
-    # ORM -> schema dönüşümü için
+    # ORM -> schema donusum icin
     model_config = ConfigDict(from_attributes=True)

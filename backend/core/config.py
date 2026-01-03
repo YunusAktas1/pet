@@ -1,6 +1,6 @@
-﻿# C:\Dev\Yunus\backend\core\config.py
-from pydantic_settings import BaseSettings, SettingsConfigDict
 from pathlib import Path
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 
@@ -15,9 +15,10 @@ class Settings(BaseSettings):
     # ---- Security ----
     jwt_secret: str = "dev-secret-change-me"
     jwt_algorithm: str = "HS256"
-    access_token_expire_minutes: int = 60  # .env: ACCESS_TOKEN_EXPIRE_MINUTES
+    access_token_expire_minutes: int = 30  # .env: ACCESS_TOKEN_EXPIRE_MINUTES
+    refresh_token_expire_days: int = 14  # .env: REFRESH_TOKEN_EXPIRE_DAYS
 
-    # Eski kodla uyumluluk (security.py 'jwt_expires_minutes' bekliyor)
+    # Backward compatibility (security.py expects jwt_expires_minutes)
     @property
     def jwt_expires_minutes(self) -> int:
         return self.access_token_expire_minutes
@@ -38,9 +39,9 @@ class Settings(BaseSettings):
     # Pydantic Settings config
     model_config = SettingsConfigDict(
         env_file=str(BASE_DIR / ".env"),  # backend/.env
-        env_prefix="",  # prefix yok
-        case_sensitive=False,  # .env'de büyük/küçük fark etmez
-        extra="ignore",  # tanımsız anahtarları yoksay
+        env_prefix="",
+        case_sensitive=False,
+        extra="ignore",
     )
 
 

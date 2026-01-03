@@ -1,10 +1,43 @@
-﻿## Hızlı Başlangıç (Docker)
+# PetMatch backend
+
+## Quick start (Docker)
 ```bash
-docker compose up -d api
-# sonra: http://127.0.0.1:8000/healthz  → {"ok": true}
+cd C:\Users\YUNUS\Documents\GitHub\pet
+docker compose up -d --build
+# run migrations inside api container
+docker compose exec api alembic upgrade head
+# health check
+curl http://127.0.0.1:8000/healthz
 ```
 
-## Yerel Geliştirme
+## Verify OpenAPI
+```bash
+curl -s http://127.0.0.1:8000/openapi.json | Select-String -Pattern '"/api/v1/auth/refresh"'
+```
+
+## Auth flow (enveloped responses)
+- `POST /api/v1/auth/signup` with `{ "email": "user@example.com", "password": "StrongPass!234" }`
+- `POST /api/v1/auth/login` returns `{ "success": true, "data": { "access_token", "refresh_token", "token_type" }, "error": null }`
+- `POST /api/v1/auth/refresh` with `{ "refresh_token": "..." }` rotates the refresh token (old one revoked) and returns new access/refresh tokens.
+- Access tokens are short-lived (default 30m); refresh tokens default to 14 days and are stored hashed in DB.
+
+PowerShell smoke test:
+```powershell
+$signup = @{ email="ci-demo@example.com"; password="Aa!123456" } | ConvertTo-Json
+Invoke-WebRequest http://127.0.0.1:8000/api/v1/auth/signup -Method Post -ContentType 'application/json' -Body $signup | Out-Null
+$login = Invoke-WebRequest http://127.0.0.1:8000/api/v1/auth/login -Method Post -ContentType 'application/json' -Body $signup | ConvertFrom-Json
+$refresh1 = $login.data.refresh_token
+Invoke-WebRequest http://127.0.0.1:8000/api/v1/auth/refresh -Method Post -ContentType 'application/json' -Body (@{refresh_token=$refresh1} | ConvertTo-Json)
+# reuse should fail with 401
+Invoke-WebRequest http://127.0.0.1:8000/api/v1/auth/refresh -Method Post -ContentType 'application/json' -Body (@{refresh_token=$refresh1} | ConvertTo-Json) -SkipHttpErrorCheck
+```
+
+## Inspect DB schema (refresh_token table)
+```bash
+docker compose exec db psql -U petuser -d petmatch -c "\\d refresh_token"
+```
+
+## Local development
 ```powershell
 $env:ENV_FILE = "backend/.env.local"
 .\backend\.venv\Scripts\python.exe -m uvicorn backend.main:app --reload --reload-dir backend
@@ -17,40 +50,10 @@ pre-commit install
 pre-commit run --all-files
 ```
 
-## CI
-
-Her push/PR'da lint+typecheck+migration+test otomatik koşar (GitHub Actions).
-
----
-
-## Doğrulama — PowerShell Komutları
-
+## Quality gates
 ```powershell
-cd C:\Dev\Yunus
-$env:ENV_FILE = "backend/.env.local"
-
-# Pre-commit'i kur (bir kerelik)
-.\backend\.venv\Scripts\python.exe -m pip install pre-commit
-.\backend\.venv\Scripts\pre-commit.exe install
-.\backend\.venv\Scripts\pre-commit.exe run --all-files
-
-# Docker ile API+DB
-docker compose up -d api
-docker compose ps
-iwr http://127.0.0.1:8000/healthz
-
-# Hızlı duman
-$signup = @{ email="ci-demo@example.com"; password="Aa!123456" } | ConvertTo-Json
-iwr http://127.0.0.1:8000/api/v1/auth/signup -Method Post -ContentType 'application/json' -Body $signup | Out-Null
-$tok = (iwr http://127.0.0.1:8000/api/v1/auth/login -Method Post -ContentType 'application/json' -Body $signup).Content | ConvertFrom-Json | % access_token
-$hdr = @{ Authorization = "Bearer $tok" }
-iwr http://127.0.0.1:8000/api/v1/pets -Method Post -Headers $hdr -ContentType 'application/json' -Body (@{name="Docky";species="cat";gender="female"} | ConvertTo-Json)
-
-# Lokal kalite kapıları yine yeşil mi?
 .\backend\.venv\Scripts\python.exe -m ruff check backend --fix
 .\backend\.venv\Scripts\python.exe -m black backend
 .\backend\.venv\Scripts\python.exe -m mypy backend
 .\backend\.venv\Scripts\python.exe -m pytest -q
 ```
-
-GitHub'a push sonrası CI otomatik çalışmalı. (Repo yoksa git init, ilk commit ve remote ekledikten sonra push.)
