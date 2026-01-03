@@ -1,8 +1,11 @@
+from __future__ import annotations
+
+import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -21,10 +24,24 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     yield
 
 
+def _request_id_middleware_factory():
+    async def middleware(request: Request, call_next):
+        request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+        request.state.request_id = request_id
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = request_id
+        return response
+
+    return middleware
+
+
 app = FastAPI(
     title="PetMatch API",
     lifespan=lifespan,
 )
+
+# Request ID middleware
+app.middleware("http")(_request_id_middleware_factory())
 
 # --- CORS ---
 # Dev'de permissive olabilir; prod'da settings.CORS_ORIGINS ile sýnýrla

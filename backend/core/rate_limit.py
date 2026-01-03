@@ -44,10 +44,17 @@ LOGOUT_LIMIT = LimitConfig(limit=10, window_seconds=60)
 LOGIN_LIMIT = LimitConfig(limit=20, window_seconds=60)
 
 
-def rate_limit_or_raise(key: str, config: LimitConfig, *, endpoint: str) -> None:
+def rate_limit_or_raise(key: str, config: LimitConfig, *, endpoint: str, request_id: str, client_ip: str) -> None:
     retry_after = limiter.allow(key, config)
     if retry_after is not None:
-        audit("auth.rate_limited", endpoint=endpoint, key=key, result="fail")
+        audit(
+            "auth.rate_limited",
+            endpoint=endpoint,
+            key=key,
+            client_ip=client_ip,
+            result="fail",
+            request_id=request_id,
+        )
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Rate limit exceeded",

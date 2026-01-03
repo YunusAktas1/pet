@@ -1,4 +1,4 @@
-﻿import os
+import os
 from collections.abc import Iterator
 from datetime import datetime, timezone
 from pathlib import Path
@@ -90,6 +90,7 @@ def test_refresh_token_hashed_and_tamper_rejected(client: TestClient) -> None:
         json={"refresh_token": tampered},
     )
     assert tamper_response.status_code == 401
+    assert tamper_response.headers.get("X-Request-ID")
 
 
 def test_refresh_rotation_revokes_old_token(client: TestClient) -> None:
@@ -167,15 +168,23 @@ def test_reuse_triggers_global_revocation(client: TestClient) -> None:
 
 def test_refresh_rate_limit_returns_429(client: TestClient) -> None:
     bad_token = "bad-token"
-    attempts = REFRESH_LIMIT.limit
-    for _ in range(attempts):
-        resp = client.post(
+    original_limit = REFRESH_LIMIT.limit
+    REFRESH_LIMIT.limit = 1
+    try:
+        resp1 = client.post(
             "/api/v1/auth/refresh",
             json={"refresh_token": bad_token},
         )
-        assert resp.status_code in {401, 429}
-    final_resp = client.post(
-        "/api/v1/auth/refresh",
-        json={"refresh_token": bad_token},
-    )
-    assert final_resp.status_code == 429
+        assert resp1.status_code in {401, 429}
+        resp2 = client.post(
+            "/api/v1/auth/refresh",
+            json={"refresh_token": bad_token},
+        )
+        assert resp2.status_code == 429
+        body = resp2.json()
+        assert body.get("success") is False
+        assert body.get("error", {}).get("code") == "rate_limited"
+        assert resp2.headers.get("Retry-After")
+        assert resp2.headers.get("X-Request-ID")
+    finally:
+        REFRESH_LIMIT.limit = original_limit

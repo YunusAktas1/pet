@@ -37,7 +37,9 @@ def signup(payload: SignupRequest, session: SessionDep) -> dict:
 
 @router.post("/login", response_model=AuthResponse)
 def login(payload: LoginRequest, request: Request, session: SessionDep) -> dict:
-    rate_limit_or_raise(client_ip(request), LOGIN_LIMIT, endpoint="auth.login")
+    rate_limit_or_raise(
+        client_ip(request), LOGIN_LIMIT, endpoint="auth.login", request_id=getattr(request.state, "request_id", ""), client_ip=client_ip(request)
+    )
 
     statement = select(User).where(User.email == payload.email)
     user = session.exec(statement).first()
@@ -53,13 +55,17 @@ def login(payload: LoginRequest, request: Request, session: SessionDep) -> dict:
 
 @router.post("/refresh", response_model=AuthResponse)
 def refresh(payload: RefreshRequest, request: Request, session: SessionDep) -> dict:
-    rate_limit_or_raise(client_ip(request), REFRESH_LIMIT, endpoint="auth.refresh")
+    rate_limit_or_raise(
+        client_ip(request), REFRESH_LIMIT, endpoint="auth.refresh", request_id=getattr(request.state, "request_id", ""), client_ip=client_ip(request)
+    )
     tokens = rotate_refresh_token(session, payload.refresh_token)
     return ok(TokenPairResponse(**tokens).model_dump())
 
 
 @router.post("/logout")
 def logout(payload: RefreshRequest, request: Request, session: SessionDep) -> dict:
-    rate_limit_or_raise(client_ip(request), LOGOUT_LIMIT, endpoint="auth.logout")
+    rate_limit_or_raise(
+        client_ip(request), LOGOUT_LIMIT, endpoint="auth.logout", request_id=getattr(request.state, "request_id", ""), client_ip=client_ip(request)
+    )
     revoke_refresh_token(session, payload.refresh_token)
     return ok({"ok": True})
