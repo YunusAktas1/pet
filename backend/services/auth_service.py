@@ -9,6 +9,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException, status
 from sqlmodel import Session, select
 
+from backend.core.audit import audit
 from backend.core.config import settings
 from backend.core.security import create_access_token
 from backend.models.refresh_token import RefreshToken
@@ -61,6 +62,7 @@ def revoke_refresh_token(session: Session, provided_token: str) -> None:
     ).first()
 
     if token_row is None:
+        audit("auth.refresh.invalid", user_id=None, jti=None, result="fail")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid refresh token",
@@ -76,6 +78,12 @@ def revoke_refresh_token(session: Session, provided_token: str) -> None:
     if token_row.revoked or token_row.revoked_at is not None or token_row.replaced_by_jti or expired:
         _revoke_all_refresh_tokens(session, token_row.user_id, now)
         session.commit()
+        audit(
+            "auth.refresh.reuse.detected",
+            user_id=token_row.user_id,
+            jti=token_row.jti,
+            result="fail",
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid refresh token",
@@ -85,6 +93,7 @@ def revoke_refresh_token(session: Session, provided_token: str) -> None:
     token_row.revoked_at = now
     session.add(token_row)
     session.commit()
+    audit("auth.logout.revoked", user_id=token_row.user_id, jti=token_row.jti, result="success")
 
 
 def issue_tokens(session: Session, user: User) -> dict[str, str]:
@@ -119,6 +128,7 @@ def rotate_refresh_token(session: Session, provided_token: str) -> dict[str, str
     ).first()
 
     if token_row is None:
+        audit("auth.refresh.invalid", user_id=None, jti=None, result="fail")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid refresh token",
@@ -127,6 +137,12 @@ def rotate_refresh_token(session: Session, provided_token: str) -> dict[str, str
     if token_row.revoked or token_row.revoked_at is not None or token_row.replaced_by_jti:
         _revoke_all_refresh_tokens(session, token_row.user_id, now)
         session.commit()
+        audit(
+            "auth.refresh.reuse.detected",
+            user_id=token_row.user_id,
+            jti=token_row.jti,
+            result="fail",
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid refresh token",
@@ -141,6 +157,12 @@ def rotate_refresh_token(session: Session, provided_token: str) -> dict[str, str
         session.add(token_row)
         _revoke_all_refresh_tokens(session, token_row.user_id, now)
         session.commit()
+        audit(
+            "auth.refresh.expired",
+            user_id=token_row.user_id,
+            jti=token_row.jti,
+            result="fail",
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Refresh token expired",
@@ -153,6 +175,12 @@ def rotate_refresh_token(session: Session, provided_token: str) -> dict[str, str
         session.add(token_row)
         _revoke_all_refresh_tokens(session, token_row.user_id, now)
         session.commit()
+        audit(
+            "auth.refresh.invalid",
+            user_id=token_row.user_id,
+            jti=token_row.jti,
+            result="fail",
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found",
@@ -172,6 +200,12 @@ def rotate_refresh_token(session: Session, provided_token: str) -> dict[str, str
         raise
 
     access_token = create_access_token(sub=user.email)
+    audit(
+        "auth.refresh.rotate.success",
+        user_id=token_row.user_id,
+        jti=new_refresh_row.jti,
+        result="success",
+    )
     return {
         "access_token": access_token,
         "refresh_token": new_raw_token,
