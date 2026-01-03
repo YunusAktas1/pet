@@ -6,10 +6,11 @@ from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlmodel import Session, SQLModel, create_engine
+from sqlmodel import Session, SQLModel, create_engine, select
 
 import backend.core.db as db_module
 from backend.main import app
+from backend.models.refresh_token import RefreshToken
 
 
 def _extract_tokens(payload: dict[str, Any]) -> dict[str, Any]:
@@ -55,6 +56,31 @@ def client(tmp_path: Path) -> Iterator[TestClient]:
             os.environ.pop("DATABASE_URL", None)
         if test_db_path.exists():
             test_db_path.unlink()
+
+
+def test_refresh_token_hashed_and_tamper_rejected(client: TestClient) -> None:
+    email = f"{uuid4().hex}@example.com"
+    password = "StrongPass!234"
+
+    signup_response = client.post(
+        "/api/v1/auth/signup",
+        json={"email": email, "password": password},
+    )
+    assert signup_response.status_code == 200, signup_response.text
+    tokens = _extract_tokens(cast(dict[str, Any], signup_response.json()))
+
+    with Session(db_module.engine) as session:
+        row = session.exec(select(RefreshToken)).first()
+        assert row is not None
+        assert row.token_hash != tokens["refresh_token"]
+        assert row.jti is not None
+
+    tampered = tokens["refresh_token"][:-1] + ("A" if tokens["refresh_token"][-1] != "A" else "B")
+    tamper_response = client.post(
+        "/api/v1/auth/refresh",
+        json={"refresh_token": tampered},
+    )
+    assert tamper_response.status_code == 401
 
 
 def test_refresh_rotation_revokes_old_token(client: TestClient) -> None:

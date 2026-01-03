@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import secrets
+import uuid
 from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
@@ -17,6 +18,10 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _new_jti() -> str:
+    return uuid.uuid4().hex
+
+
 def _hash_token(raw_token: str) -> str:
     return hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
 
@@ -27,6 +32,7 @@ def _new_refresh_token(user_id: int) -> tuple[str, RefreshToken]:
     expires_at = _now() + timedelta(days=settings.refresh_token_expire_days)
     refresh_token = RefreshToken(
         user_id=user_id,
+        jti=_new_jti(),
         token_hash=token_hash,
         expires_at=expires_at,
     )
@@ -75,6 +81,7 @@ def rotate_refresh_token(session: Session, provided_token: str) -> dict[str, str
         expires_at = expires_at.replace(tzinfo=timezone.utc)
     if expires_at <= now:
         token_row.revoked = True
+        token_row.revoked_at = now
         session.add(token_row)
         session.commit()
         raise HTTPException(
@@ -85,6 +92,7 @@ def rotate_refresh_token(session: Session, provided_token: str) -> dict[str, str
     user = session.get(User, token_row.user_id)
     if user is None or user.email is None:
         token_row.revoked = True
+        token_row.revoked_at = now
         session.add(token_row)
         session.commit()
         raise HTTPException(
@@ -93,7 +101,9 @@ def rotate_refresh_token(session: Session, provided_token: str) -> dict[str, str
         )
 
     token_row.revoked = True
+    token_row.revoked_at = now
     new_raw_token, new_refresh_row = _new_refresh_token(token_row.user_id)
+    token_row.replaced_by_jti = new_refresh_row.jti
     try:
         session.add(token_row)
         session.add(new_refresh_row)
