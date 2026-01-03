@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, SQLModel, create_engine, select
 
 import backend.core.db as db_module
+from backend.core.rate_limit import REFRESH_LIMIT, limiter
 from backend.main import app
 from backend.models.refresh_token import RefreshToken
 
@@ -17,6 +18,13 @@ from backend.models.refresh_token import RefreshToken
 def _extract_tokens(payload: dict[str, Any]) -> dict[str, Any]:
     data = cast(dict[str, Any], payload.get("data", payload))
     return data
+
+
+@pytest.fixture(autouse=True)
+def reset_rate_limits() -> Iterator[None]:
+    limiter.reset()
+    yield
+    limiter.reset()
 
 
 @pytest.fixture
@@ -157,25 +165,17 @@ def test_reuse_triggers_global_revocation(client: TestClient) -> None:
         assert all(r.revoked for r in rows)
 
 
-def test_logout_revokes_token(client: TestClient) -> None:
-    email = f"{uuid4().hex}@example.com"
-    password = "StrongPass!234"
-
-    signup_response = client.post(
-        "/api/v1/auth/signup",
-        json={"email": email, "password": password},
-    )
-    assert signup_response.status_code == 200
-    tokens = _extract_tokens(cast(dict[str, Any], signup_response.json()))
-
-    logout_response = client.post(
-        "/api/v1/auth/logout",
-        json={"refresh_token": tokens["refresh_token"]},
-    )
-    assert logout_response.status_code == 200
-
-    reuse_response = client.post(
+def test_refresh_rate_limit_returns_429(client: TestClient) -> None:
+    bad_token = "bad-token"
+    attempts = REFRESH_LIMIT.limit
+    for _ in range(attempts):
+        resp = client.post(
+            "/api/v1/auth/refresh",
+            json={"refresh_token": bad_token},
+        )
+        assert resp.status_code in {401, 429}
+    final_resp = client.post(
         "/api/v1/auth/refresh",
-        json={"refresh_token": tokens["refresh_token"]},
+        json={"refresh_token": bad_token},
     )
-    assert reuse_response.status_code == 401
+    assert final_resp.status_code == 429

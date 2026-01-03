@@ -1,9 +1,10 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlmodel import Session, select
 
 from backend.core.db import get_session
+from backend.core.rate_limit import LOGOUT_LIMIT, LOGIN_LIMIT, REFRESH_LIMIT, client_ip, rate_limit_or_raise
 from backend.core.response import ok
 from backend.core.security import hash_password, verify_password
 from backend.models.user import User
@@ -35,7 +36,9 @@ def signup(payload: SignupRequest, session: SessionDep) -> dict:
 
 
 @router.post("/login", response_model=AuthResponse)
-def login(payload: LoginRequest, session: SessionDep) -> dict:
+def login(payload: LoginRequest, request: Request, session: SessionDep) -> dict:
+    rate_limit_or_raise(client_ip(request), LOGIN_LIMIT, endpoint="auth.login")
+
     statement = select(User).where(User.email == payload.email)
     user = session.exec(statement).first()
     if not user or not verify_password(payload.password, user.password_hash):
@@ -49,12 +52,14 @@ def login(payload: LoginRequest, session: SessionDep) -> dict:
 
 
 @router.post("/refresh", response_model=AuthResponse)
-def refresh(payload: RefreshRequest, session: SessionDep) -> dict:
+def refresh(payload: RefreshRequest, request: Request, session: SessionDep) -> dict:
+    rate_limit_or_raise(client_ip(request), REFRESH_LIMIT, endpoint="auth.refresh")
     tokens = rotate_refresh_token(session, payload.refresh_token)
     return ok(TokenPairResponse(**tokens).model_dump())
 
 
 @router.post("/logout")
-def logout(payload: RefreshRequest, session: SessionDep) -> dict:
+def logout(payload: RefreshRequest, request: Request, session: SessionDep) -> dict:
+    rate_limit_or_raise(client_ip(request), LOGOUT_LIMIT, endpoint="auth.logout")
     revoke_refresh_token(session, payload.refresh_token)
     return ok({"ok": True})
