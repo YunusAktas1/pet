@@ -1,6 +1,6 @@
 import os
 from collections.abc import Iterator
-from typing import cast
+from typing import Any, cast
 from uuid import uuid4
 
 import pytest
@@ -30,8 +30,9 @@ def _login(client: TestClient, email: str, password: str) -> str:
         json={"email": email, "password": password},
     )
     assert response.status_code == 200, response.text
-    data = cast(dict[str, str], response.json())
-    return data["access_token"]
+    payload = cast(dict[str, Any], response.json())
+    data = cast(dict[str, Any], payload.get("data", payload))
+    return cast(str, data["access_token"])
 
 
 def _fetch_user_id(email: str) -> int:

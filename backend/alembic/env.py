@@ -52,7 +52,7 @@ config.set_main_option("sqlalchemy.url", database_url)
 
 def _import_all_models() -> None:
     """Import all modules within backend.models to register SQLModel metadata."""
-    import models as models_package  # noqa: F401
+    import backend.models as models_package  # noqa: F401
 
     def iter_modules(package) -> Iterable[str]:
         if hasattr(package, "__path__"):
@@ -70,7 +70,7 @@ _import_all_models()
 
 try:
     model_base = getattr(
-        importlib.import_module("models"),
+        importlib.import_module("backend.models"),
         "SQLModel",
         SQLModel,
     )
@@ -109,7 +109,6 @@ def do_run_migrations(connection: Connection) -> None:
 
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode, supporting sync and async engines."""
-    # Mypy type narrowing: ensure database_url is not None
     if database_url is None:
         raise RuntimeError("DATABASE_URL is required for migrations")
 

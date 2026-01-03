@@ -28,7 +28,8 @@ def _login(client: TestClient, email: str, password: str) -> str:
         json={"email": email, "password": password},
     )
     assert response.status_code == 200, response.text
-    data = cast(dict[str, Any], response.json())
+    payload = cast(dict[str, Any], response.json())
+    data = cast(dict[str, Any], payload.get("data", payload))
     return cast(str, data["access_token"])
 
 

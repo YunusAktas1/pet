@@ -17,24 +17,19 @@ services:
 
   api:
     build:
-      context: .
-      dockerfile: backend/Dockerfile
-    environment:
-      - ENV_FILE=backend/.env.docker
+      context: ./backend
+      dockerfile: Dockerfile
     env_file:
-      - backend/.env.docker
+      - ./backend/.env.docker
     ports:
       - "8000:8000"
     volumes:
       - ./backend:/app/backend
-      - ./alembic:/app/alembic
-      - ./scripts:/app/scripts
+      - ./backend/alembic:/app/alembic
     depends_on:
       db:
         condition: service_healthy
-    command: >
-      sh -c "alembic upgrade head &&
-             uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir backend"
+    command: sh -c "alembic upgrade head && uvicorn backend.main:app --host 0.0.0.0 --port 8000"
 
 volumes:
   pgdata:
