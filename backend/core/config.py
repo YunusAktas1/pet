@@ -31,7 +31,7 @@ class Settings(BaseSettings):
 
     # ---- Other ----
     log_level: str = "info"
-    cors_allow_origins: list[str] = ["*"]
+    CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:5173"]
 
     # ---- Media / Photo ----
     MEDIA_DIR: str = "media"

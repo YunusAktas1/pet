@@ -44,9 +44,10 @@ app = FastAPI(
 app.middleware("http")(_request_id_middleware_factory())
 
 # --- CORS ---
-# Dev'de permissive olabilir; prod'da settings.CORS_ORIGINS ile sýnýrla
-# settings içinde CORS_ORIGINS yoksa "*" kullanýr.
-origins = getattr(settings, "CORS_ORIGINS", None) or ["*"]
+origins = getattr(settings, "CORS_ORIGINS", None) or []
+env_name = (getattr(settings, 'env', '') or '').lower()
+if env_name not in {"prod", "production"} and not origins:
+    origins = ["*"]
 
 app.add_middleware(
     CORSMiddleware,

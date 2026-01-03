@@ -10,6 +10,16 @@ docker compose exec api alembic upgrade head
 curl http://127.0.0.1:8000/healthz
 ```
 
+## Local dev (venv)
+```powershell
+# set required secret for refresh token HMAC hashing
+$env:REFRESH_TOKEN_HMAC_SECRET="dev-refresh-hmac-secret-change-me-32chars-minimum"
+python -m venv backend/.venv
+.ackend\.venv\Scripts\Activate.ps1
+pip install -r backend/requirements.txt
+python -m uvicorn backend.main:app --reload --reload-dir backend
+```
+
 ## Verify OpenAPI
 ```bash
 curl -s http://127.0.0.1:8000/openapi.json | Select-String -Pattern '"/api/v1/auth/refresh"'
@@ -36,14 +46,22 @@ Invoke-WebRequest http://127.0.0.1:8000/api/v1/auth/refresh -Method Post -Conten
 
 ## Inspect DB schema (refresh_token table)
 ```bash
-docker compose exec db psql -U petuser -d petmatch -c "\\d refresh_token"
+docker compose exec db psql -U petuser -d petmatch -c "\d refresh_token"
 ```
 
-## Local development
+## CORS
+- Dev defaults allow:
+  - http://localhost:3000
+  - http://localhost:5173
+- Override via `CORS_ORIGINS` in `.env` for other environments.
+
+## Seed data (dev only)
 ```powershell
-$env:ENV_FILE = "backend/.env.local"
-.\backend\.venv\Scripts\python.exe -m uvicorn backend.main:app --reload --reload-dir backend
+# ensure DB is reachable (docker compose up or local DB)
+$env:REFRESH_TOKEN_HMAC_SECRET="dev-refresh-hmac-secret-change-me-32chars-minimum"
+python scripts/seed.py
 ```
+- Idempotent: re-running keeps/updates demo users (`seed@example.com`, `seed2@example.com`), pets, photos, pair, messages, and sample matches.
 
 ## Pre-commit
 ```powershell
@@ -54,8 +72,8 @@ pre-commit run --all-files
 
 ## Quality gates
 ```powershell
-.\backend\.venv\Scripts\python.exe -m ruff check backend --fix
-.\backend\.venv\Scripts\python.exe -m black backend
-.\backend\.venv\Scripts\python.exe -m mypy backend
-.\backend\.venv\Scripts\python.exe -m pytest -q
+.ackend\.venv\Scripts\python.exe -m ruff check backend --fix
+.ackend\.venv\Scripts\python.exe -m black backend
+.ackend\.venv\Scripts\python.exe -m mypy backend
+.ackend\.venv\Scripts\python.exe -m pytest -q
 ```
