@@ -178,22 +178,22 @@ def test_matches_pagination(client: TestClient) -> None:
     list_response = client.get(
         "/api/v1/matches",
         headers={"Authorization": f"Bearer {owner_token}"},
-        params={"limit": 2, "offset": 0},
+        params={"limit": 2},
     )
     assert list_response.status_code == 200, list_response.text
-    matches_page_one = list_response.json()
-    assert len(matches_page_one) == 2
-    match_ids = {match["id"] for match in matches_page_one}
-    total_header = list_response.headers.get("X-Total-Count")
-    assert total_header is not None
-    assert int(total_header) >= 2
+    page_one = list_response.json()
+    assert page_one["limit"] == 2
+    assert len(page_one["items"]) == 2
+    first_ids = {m["id"] for m in page_one["items"]}
+    assert page_one["next_cursor"]
 
     list_response = client.get(
         "/api/v1/matches",
         headers={"Authorization": f"Bearer {owner_token}"},
-        params={"limit": 2, "offset": 2},
+        params={"limit": 2, "cursor": page_one["next_cursor"]},
     )
     assert list_response.status_code == 200, list_response.text
-    matches_page_two = list_response.json()
-    second_match_ids = {match["id"] for match in matches_page_two}
-    assert match_ids.isdisjoint(second_match_ids)
+    page_two = list_response.json()
+    assert len(page_two["items"]) >= 1
+    second_ids = {m["id"] for m in page_two["items"]}
+    assert first_ids.isdisjoint(second_ids)

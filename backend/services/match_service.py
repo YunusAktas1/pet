@@ -6,6 +6,7 @@ from typing import cast
 
 from fastapi import HTTPException, status
 from sqlalchemy import desc, func
+from backend.core.pagination import encode_cursor
 from sqlalchemy.sql.schema import Table
 from sqlmodel import Session, select
 
@@ -78,28 +79,17 @@ def count_by_decision(owner_user_id: int, session: Session) -> dict[str, int]:
     return counts
 
 
+
 def list_matches(
     owner_user_id: int,
     *,
     session: Session,
     limit: int,
-    offset: int,
+    cursor: dict | None = None,
     decision: MatchDecision | None = None,
-) -> tuple[int, list[Match]]:
+) -> tuple[list[Match], str | None]:
     match_table = cast(Table, Match.__table__)  # type: ignore[attr-defined]
     pet_table = cast(Table, Pet.__table__)  # type: ignore[attr-defined]
-
-    count_statement = (
-        select(func.count())
-        .select_from(match_table)
-        .where(match_table.c.owner_user_id == owner_user_id)
-    )
-    if decision is not None:
-        count_statement = count_statement.where(match_table.c.decision == decision)
-    total_result = session.exec(count_statement).one()
-    total_count = int(
-        total_result[0] if isinstance(total_result, tuple) else total_result
-    )
 
     statement = select(Match).join(
         pet_table,
@@ -108,10 +98,36 @@ def list_matches(
     statement = statement.where(match_table.c.owner_user_id == owner_user_id)
     if decision is not None:
         statement = statement.where(match_table.c.decision == decision)
-    statement = statement.order_by(desc(match_table.c.created_at))
-    statement = statement.offset(offset).limit(limit)
-    matches = list(session.exec(statement).all())
-    return total_count, matches
+
+    if cursor:
+        cur_created = cursor.get("created_at")
+        cur_id = cursor.get("id")
+        if cur_created is not None and cur_id is not None:
+            statement = statement.where(
+                (match_table.c.created_at < cur_created)
+                | (
+                    (match_table.c.created_at == cur_created)
+                    & (match_table.c.id < int(cur_id))
+                )
+            )
+
+    statement = statement.order_by(desc(match_table.c.created_at), desc(match_table.c.id))
+    statement = statement.limit(limit + 1)
+    records = list(session.exec(statement).all())
+
+    has_more = len(records) > limit
+    items = records[:limit]
+    next_cursor: str | None = None
+    if has_more and items:
+        last = items[-1]
+        next_cursor = encode_cursor(
+            {
+                "created_at": last.created_at.isoformat(),
+                "id": last.id,
+            }
+        )
+
+    return items, next_cursor
 
 
 def ensure_match_for_decision(

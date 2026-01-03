@@ -107,24 +107,26 @@ def test_match_pagination_delete_and_stats(client: TestClient) -> None:
     list_response = client.get(
         "/api/v1/matches",
         headers=_auth_headers(token_a),
-        params={"decision": "liked", "limit": 1, "offset": 0},
+        params={"decision": "liked", "limit": 1},
     )
     assert list_response.status_code == 200, list_response.text
-    assert list_response.headers.get("X-Total-Count") is not None
     first_page = list_response.json()
-    assert len(first_page) == 1
-    first_match_id = first_page[0]["target_pet_id"]
+    first_items = first_page.get("items", [])
+    assert len(first_items) == 1
+    first_match_id = first_items[0]["target_pet_id"]
+    next_cursor = first_page.get("next_cursor")
 
     list_response = client.get(
         "/api/v1/matches",
         headers=_auth_headers(token_a),
-        params={"decision": "liked", "limit": 1, "offset": 1},
+        params={"decision": "liked", "limit": 1, "cursor": next_cursor},
     )
     assert list_response.status_code == 200, list_response.text
     second_page = list_response.json()
-    assert len(second_page) <= 1
-    if second_page:
-        assert second_page[0]["target_pet_id"] != first_match_id
+    second_items = second_page.get("items", [])
+    assert len(second_items) <= 1
+    if second_items:
+        assert second_items[0]["target_pet_id"] != first_match_id
 
     delete_response = client.delete(
         f"/api/v1/matches/{first_match_id}",
@@ -138,8 +140,9 @@ def test_match_pagination_delete_and_stats(client: TestClient) -> None:
         params={"decision": "liked"},
     )
     assert list_response.status_code == 200, list_response.text
+    remaining_items = list_response.json().get("items", [])
     assert all(
-        match["target_pet_id"] != first_match_id for match in list_response.json()
+        match["target_pet_id"] != first_match_id for match in remaining_items
     )
 
     stats_response = client.get(

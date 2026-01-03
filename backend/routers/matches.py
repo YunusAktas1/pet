@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlmodel import Session, SQLModel
 
 from backend.core.db import get_session
+from backend.core.pagination import decode_cursor, encode_cursor, parse_cursor_datetime, parse_limit
 from backend.models.match import MatchDecision, MatchOut
 from backend.models.pet import Gender, PetOut
 from backend.models.user import User
@@ -113,7 +114,7 @@ def set_decision(
     return MatchOut.model_validate(match, from_attributes=True)
 
 
-@router.get("", response_model=list[MatchOut])
+@router.get("")
 def list_my_matches(
     current: CurrentUserDep,
     session: SessionDep,
@@ -122,24 +123,32 @@ def list_my_matches(
         MatchDecision | None,
         Query(description="Filter by decision (liked, passed, undecided)"),
     ] = None,
-    limit: Annotated[int, Query(ge=1, le=100)] = 10,
-    offset: Annotated[int, Query(ge=0)] = 0,
-) -> list[MatchOut]:
+    limit: Annotated[int | None, Query()] = None,
+    cursor: Annotated[str | None, Query()] = None,
+) -> dict:
     if current.id is None:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="authenticated user missing identifier",
         )
 
-    total_count, matches = list_matches(
+    resolved_limit = parse_limit(limit)
+    cursor_payload = decode_cursor(cursor) if cursor else None
+    if cursor_payload and "created_at" in cursor_payload:
+        cursor_payload["created_at"] = parse_cursor_datetime(cursor_payload["created_at"])
+
+    items, next_cursor = list_matches(
         owner_user_id=current.id,
         session=session,
-        limit=limit,
-        offset=offset,
+        limit=resolved_limit,
+        cursor=cursor_payload,
         decision=decision,
     )
-    response.headers["X-Total-Count"] = str(total_count)
-    return [MatchOut.model_validate(match, from_attributes=True) for match in matches]
+    return {
+        "items": [MatchOut.model_validate(match, from_attributes=True) for match in items],
+        "next_cursor": next_cursor,
+        "limit": resolved_limit,
+    }
 
 
 @router.delete("/{target_pet_id}", status_code=status.HTTP_204_NO_CONTENT)

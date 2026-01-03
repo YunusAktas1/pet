@@ -123,7 +123,8 @@ def test_generate_and_list_matches(client: TestClient) -> None:
         headers={"Authorization": f"Bearer {token_a}"},
     )
     assert response.status_code == 200, response.text
-    matches = response.json()
+    payload = response.json()
+    matches = payload.get("items", payload)
     assert any(match["target_pet_id"] == pet_b.id for match in matches)
 
     response = client.post(

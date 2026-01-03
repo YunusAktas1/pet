@@ -101,7 +101,8 @@ def test_decide_and_filter_matches(client: TestClient) -> None:
         params={"decision": "liked"},
     )
     assert response.status_code == 200
-    liked_matches = response.json()
+    liked_payload = response.json()
+    liked_matches = liked_payload.get("items", liked_payload)
     assert any(
         match["target_pet_id"] == pet_id and match["decision"] == "liked"
         for match in liked_matches
@@ -128,7 +129,9 @@ def test_decide_and_filter_matches(client: TestClient) -> None:
         params={"decision": "liked"},
     )
     assert response.status_code == 200
-    assert all(match["target_pet_id"] != pet_id for match in response.json())
+    payload = response.json()
+    matches = payload.get("items", payload)
+    assert all(match["target_pet_id"] != pet_id for match in matches)
 
     response = client.get(
         "/api/v1/matches",
@@ -136,7 +139,9 @@ def test_decide_and_filter_matches(client: TestClient) -> None:
         params={"decision": "passed"},
     )
     assert response.status_code == 200
+    payload = response.json()
+    matches = payload.get("items", payload)
     assert any(
         match["target_pet_id"] == pet_id and match["decision"] == "passed"
-        for match in response.json()
+        for match in matches
     )
