@@ -23,6 +23,10 @@ from backend.models.pet import Gender, Pet  # type: ignore
 from backend.models.photo import Photo  # type: ignore
 from backend.models.user import User  # type: ignore
 
+SEED_PASSWORD = os.getenv("SEED_PASSWORD", "SeedPass123!")
+SEED_EMAIL_1 = os.getenv("SEED_EMAIL_1", "seed@example.com")
+SEED_EMAIL_2 = os.getenv("SEED_EMAIL_2", "seed2@example.com")
+
 
 def get_or_create_user(session: Session, email: str, password: str) -> User:
     user = session.exec(select(User).where(User.email == email)).first()
@@ -135,8 +139,8 @@ def run() -> None:
     print(f"[seed] ENV_FILE={env_file} (override with ENV_FILE if needed)")
 
     with Session(engine) as session:
-        demo_user = get_or_create_user(session, "seed@example.com", "SeedPass123!")
-        other_user = get_or_create_user(session, "seed2@example.com", "SeedPass123!")
+        demo_user = get_or_create_user(session, SEED_EMAIL_1, SEED_PASSWORD)
+        other_user = get_or_create_user(session, SEED_EMAIL_2, SEED_PASSWORD)
 
         pet_a = get_or_create_pet(session, demo_user.id, "Mia", "cat", Gender.female)
         pet_b = get_or_create_pet(session, demo_user.id, "Rex", "dog", Gender.male)
@@ -158,12 +162,14 @@ def run() -> None:
         ensure_matches(session, demo_user.id, [pet_c, pet_b, pet_a])
 
     print("[seed] complete")
-
-
-if __name__ == "__main__":
-    run()
-
+    print("[seed] DEMO CREDENTIALS")
+    print(f"[seed] email_1={SEED_EMAIL_1} password={SEED_PASSWORD}")
+    print(f"[seed] email_2={SEED_EMAIL_2} password={SEED_PASSWORD}")
 
 
 def main() -> None:
     run()
+
+
+if __name__ == "__main__":
+    main()
