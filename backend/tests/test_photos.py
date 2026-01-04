@@ -135,7 +135,8 @@ def test_upload_and_primary_autoset(client: TestClient) -> None:
 
     pets_response = client.get("/api/v1/pets", headers=_auth_headers(token))
     assert pets_response.status_code == 200, pets_response.text
-    pets = cast(list[dict[str, Any]], pets_response.json())
+    payload = pets_response.json()
+    pets = cast(list[dict[str, Any]], payload.get("items", []))
     assert pets
     pet_payload = pets[0]
     assert pet_payload["primary_photo_url"] == photo["url"]
@@ -193,7 +194,8 @@ def test_primary_switch_and_delete(client: TestClient) -> None:
 
     pets_response = client.get("/api/v1/pets", headers=_auth_headers(token))
     assert pets_response.status_code == 200, pets_response.text
-    pet_payload = cast(list[dict[str, Any]], pets_response.json())[0]
+    payload = pets_response.json()
+    pet_payload = cast(list[dict[str, Any]], payload.get("items", []))[0]
     assert pet_payload["primary_photo_url"] == photos[0]["url"]
 
 

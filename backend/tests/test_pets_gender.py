@@ -93,5 +93,6 @@ def test_create_pet_includes_gender(client: TestClient) -> None:
         headers={"Authorization": f"Bearer {token}"},
     )
     assert list_response.status_code == 200, list_response.text
-    pets = list_response.json()
+    payload = list_response.json()
+    pets = payload.get("items", []) if isinstance(payload, dict) else payload
     assert any(p["gender"] == Gender.male.value for p in pets)

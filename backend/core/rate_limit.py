@@ -40,7 +40,7 @@ class RateLimiter:
 limiter = RateLimiter()
 
 # Default limits (per key = IP for now)
-REFRESH_LIMIT = LimitConfig(limit=5, window_seconds=60)
+REFRESH_LIMIT = LimitConfig(limit=50, window_seconds=60)
 LOGOUT_LIMIT = LimitConfig(limit=10, window_seconds=60)
 LOGIN_LIMIT = LimitConfig(limit=20, window_seconds=60)
 

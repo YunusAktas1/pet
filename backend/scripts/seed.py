@@ -1,6 +1,7 @@
 
 from __future__ import annotations
 
+import base64
 import os
 import sys
 from pathlib import Path
@@ -26,6 +27,19 @@ from backend.models.user import User  # type: ignore
 SEED_PASSWORD = os.getenv("SEED_PASSWORD", "SeedPass123!")
 SEED_EMAIL_1 = os.getenv("SEED_EMAIL_1", "seed@example.com")
 SEED_EMAIL_2 = os.getenv("SEED_EMAIL_2", "seed2@example.com")
+
+_PLACEHOLDER_JPEG_B64 = (
+    "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAABAUABv/EABsQAQACAwEBAAAAAAAAAAAAAAECAwARBBIh/8QAFQEBAQAAAAAAAAAAAAAAAAAAAQL/xAAXEQEAAwAAAAAAAAAAAAAAAAAAARFB/9oADAMBAAIRAxEAPwCz4O9y1emwQmmSUUHPqGiy8FdqvhX//2Q=="
+)
+
+
+def _write_placeholder(filename: str) -> None:
+    media_dir = Path(settings.MEDIA_DIR)
+    media_dir.mkdir(parents=True, exist_ok=True)
+    target = media_dir / filename
+    if not target.exists():
+        data = base64.b64decode(_PLACEHOLDER_JPEG_B64)
+        target.write_bytes(data)
 
 
 def get_or_create_user(session: Session, email: str, password: str) -> User:
@@ -68,7 +82,9 @@ def ensure_photo(
 ) -> Photo:
     existing = session.exec(select(Photo).where(Photo.filename == filename)).first()
     if existing:
+        _write_placeholder(filename)
         return existing
+    _write_placeholder(filename)
     photo = Photo(
         pet_id=pet.id,
         filename=filename,

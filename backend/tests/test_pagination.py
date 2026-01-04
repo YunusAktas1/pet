@@ -107,22 +107,23 @@ def test_pets_pagination_and_filters(client: TestClient) -> None:
     list_response = client.get(
         "/api/v1/pets",
         headers={"Authorization": f"Bearer {token}"},
-        params={"page": 1, "page_size": 2},
+        params={"limit": 2},
     )
     assert list_response.status_code == 200, list_response.text
     page_one = list_response.json()
-    assert len(page_one) == 2
-    first_ids = {pet["id"] for pet in page_one}
+    assert page_one["limit"] == 2
+    assert len(page_one.get("items", [])) == 2
+    first_ids = {pet["id"] for pet in page_one.get("items", [])}
+    assert page_one["next_cursor"]
 
     list_response = client.get(
         "/api/v1/pets",
         headers={"Authorization": f"Bearer {token}"},
-        params={"page": 2, "page_size": 2},
+        params={"limit": 2, "cursor": page_one["next_cursor"]},
     )
     assert list_response.status_code == 200, list_response.text
     page_two = list_response.json()
-    assert len(page_two) == 2
-    second_ids = {pet["id"] for pet in page_two}
+    second_ids = {pet["id"] for pet in page_two.get("items", [])}
     assert first_ids.isdisjoint(second_ids)
 
     cat_response = client.get(
@@ -131,7 +132,7 @@ def test_pets_pagination_and_filters(client: TestClient) -> None:
         params={"species": "cat"},
     )
     assert cat_response.status_code == 200, cat_response.text
-    cats = cat_response.json()
+    cats = cat_response.json().get("items", [])
     assert cats
     assert all(p["species"] == "cat" for p in cats)
 
@@ -141,10 +142,9 @@ def test_pets_pagination_and_filters(client: TestClient) -> None:
         params={"gender": "male"},
     )
     assert male_response.status_code == 200, male_response.text
-    male_pets = male_response.json()
+    male_pets = male_response.json().get("items", [])
     assert male_pets
     assert all(p["gender"] == Gender.male.value for p in male_pets)
-
 
 def test_matches_pagination(client: TestClient) -> None:
     password = "StrongPass123$"

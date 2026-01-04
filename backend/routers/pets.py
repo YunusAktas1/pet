@@ -1,14 +1,16 @@
+
 from __future__ import annotations
 
 from typing import Annotated, cast
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import desc, func
 from sqlalchemy.sql.schema import Table
 from sqlmodel import Session, select
 
 from backend.core.db import get_session
+from backend.core.pagination import decode_cursor, encode_cursor, parse_cursor_datetime, parse_limit
 from backend.core.security import decode_token
 from backend.models.pet import Gender, Pet, PetCreate, PetOut
 from backend.models.photo import Photo
@@ -134,16 +136,15 @@ def create_pet(
     return pet
 
 
-@router.get("", response_model=list[PetOut])
+@router.get("")
 def list_my_pets(
     current: CurrentUserDep,
     session: SessionDep,
-    response: Response,
     species: Annotated[str | None, Query()] = None,
     gender: Annotated[str | None, Query()] = None,
-    page: Annotated[int, Query(ge=1)] = 1,
-    page_size: Annotated[int, Query(ge=1, le=100)] = 20,
-) -> list[PetOut]:
+    limit: Annotated[int | None, Query(ge=1, le=100)] = 20,
+    cursor: Annotated[str | None, Query()] = None,
+) -> dict:
     user_id = _require_user_id(current)
 
     conditions = [Pet.owner_id == user_id]
@@ -165,15 +166,33 @@ def list_my_pets(
 
     pet_table = cast(Table, Pet.__table__)  # type: ignore[attr-defined]
 
-    total_result = session.exec(select(func.count(pet_table.c.id)).where(*conditions))
-    total_count = int(total_result.first() or 0)
+    parsed_limit = parse_limit(limit, default=20, max_limit=100)
+    parsed_cursor = None
+    if cursor:
+        payload = decode_cursor(cursor)
+        payload["created_at"] = parse_cursor_datetime(str(payload.get("created_at")))
+        parsed_cursor = payload
 
-    statement = select(Pet).where(*conditions).order_by(desc(pet_table.c.id))
+    statement = select(Pet).where(*conditions)
 
-    offset = (page - 1) * page_size
-    statement = statement.offset(offset).limit(page_size)
+    if parsed_cursor:
+        cur_created = parsed_cursor.get("created_at")
+        cur_id = parsed_cursor.get("id")
+        if cur_created is not None and cur_id is not None:
+            statement = statement.where(
+                (pet_table.c.created_at < cur_created)
+                | (
+                    (pet_table.c.created_at == cur_created)
+                    & (pet_table.c.id < int(cur_id))
+                )
+            )
+
+    statement = statement.order_by(desc(pet_table.c.created_at), desc(pet_table.c.id))
+    statement = statement.limit(parsed_limit + 1)
 
     pets = session.exec(statement).all()
+    has_more = len(pets) > parsed_limit
+    pets = pets[:parsed_limit]
     pet_ids = [pet.id for pet in pets if pet.id is not None]
 
     photos_by_pet: dict[int, list[Photo]] = {pet_id: [] for pet_id in pet_ids}
@@ -203,8 +222,17 @@ def list_my_pets(
         )
         results.append(pet_out)
 
-    response.headers["X-Total-Count"] = str(total_count)
-    return results
+    next_cursor = None
+    if has_more and pets:
+        last = pets[-1]
+        next_cursor = encode_cursor(
+            {
+                "created_at": last.created_at.isoformat(),
+                "id": last.id,
+            }
+        )
+
+    return {"items": results, "next_cursor": next_cursor, "limit": parsed_limit}
 
 
 @router.get("/{pet_id}", response_model=PetOut)
