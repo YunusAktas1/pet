@@ -59,7 +59,7 @@ docker compose exec db psql -U petuser -d petmatch -c "\d refresh_token"
 ```powershell
 # ensure DB is reachable (docker compose up or local DB)
 $env:REFRESH_TOKEN_HMAC_SECRET="dev-refresh-hmac-secret-change-me-32chars-minimum"
-python scripts/seed.py
+python -m backend.scripts.seed
 ```
 - Idempotent: re-running keeps/updates demo users (`seed@example.com`, `seed2@example.com`), pets, photos, pair, messages, and sample matches.
 
