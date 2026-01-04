@@ -55,3 +55,7 @@ logs/
 
 # Node
 node_modules/
+
+# media
+media/*
+!media/.gitkeep
